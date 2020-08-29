@@ -279,7 +279,7 @@ class Var(Term):
     return self.unification_chain_next.unification_chain_end( ) if self._has_unification_chain_next( ) else self
 
 
-# class FD_Var(Var):
+# class Var_FD(Var):
 #   """
 #   A Finite Domain variable
 #   """

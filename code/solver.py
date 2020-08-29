@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import List, Set, Union
 
-from control_structures import Trace
-
 
 class All_Different:
+    """ Each All_Different object is a collection of FD_Vars that must be different. """
 
+    # sibs_dict is a dictionary. Each key is an FD_Var's; the value is a set of FD_Var's that must differ from it.
     # sibs_dict = {FD_Var_x: {FD_Var_i that must be different from FD_Var_x}}
-    # Aggregated from the All_Different declarations
+    # sibs_dict  is aggregated from the All_Different declarations.
     sibs_dict = {}
 
-    def __init__(self, vars: Set[FD_Var]):
+    def __init__(self, vars: Set[Var_FD]):
         self.vars = vars
         for v in vars:
             All_Different.sibs_dict[v] = All_Different.sibs_dict.setdefault(v, set()) | (vars - {v})
@@ -21,21 +21,33 @@ class All_Different:
         return all(All_Different.satisfied_for_var(v) for v in All_Different.sibs_dict)
 
     @staticmethod
-    def satisfied_for_var(v: FD_Var):
-        if not v.is_instantiated(): return True
-        return all(v.value() != w.value() for w in All_Different.sibs_dict[v])
+    def propagate_value(var_1, value):
+        for var_2 in All_Different.sibs_dict[var_1]:
+            var_2.update_range(var_2.range - {value})
+
+    @staticmethod
+    def satisfied_for_var(v: Var_FD):
+        # Finally got to use the walrus operator.
+        satisfied = (v_value := v.value()) is None or \
+                    all(v_value != w.value() for w in All_Different.sibs_dict[v])
+        return satisfied
 
     @staticmethod
     def to_string_sibs_dict():
-        return '{' + ", ".join([All_Different.to_string_sibs_entry(v) for v in All_Different.sibs_dict]) + '}'
+        return f'{"{"}{", ".join([All_Different.to_string_sibs_entry(v) for v in All_Different.sibs_dict])}{"}"}'
 
     @staticmethod
     def to_string_sibs_entry(v):
         entry = f'{v.name}: ' + '{' + ", ".join(v.name for v in All_Different.sibs_dict[v]) + '}'
         return entry
 
+    @staticmethod
+    def undo_propagate_value(var):
+        for v in All_Different.sibs_dict[var]:
+            v.undo_update_range()
 
-class FD_Var:
+
+class Var_FD:
     """ A Finite Domain variable """
     id = 0
 
@@ -43,61 +55,48 @@ class FD_Var:
     smallest_first = False
 
     def __init__(self, init_range=None, name=None):
-        FD_Var.id += 1
-        self.id = FD_Var.id
-        self.name = name if name is not None else f'V{str(self.id)}'
-        self.range = set() if init_range is None else init_range
+        cls = self.__class__
+        cls.id += 1
+        self.id = cls.id
+        cls_first_letter = str(cls).split('.')[1][0]
+        self.name = name if name else cls_first_letter + str(cls.id)
+
+        self.range = set() if init_range is None else  \
+                     {init_range} if type(init_range) in [int, str, float] else \
+                     init_range
+
         self.range_was_set_stack = []
         self.was_set = False
         self.unification_chain_next = None
 
-    def __eq__(self, other: FD_Var):
+    def __eq__(self, other: Var_FD):
         return self.id == other.id
 
     def __hash__(self):
         return hash(self.id)
 
     def __str__(self):
-        name_part = '' if self.name is None else self.name + ('*' if self.was_set else '') + ': '
-        (left, right) = ("{", "}")
-        return f'{name_part}{left}{", ".join([str(x) for x in self.range])}{right}'
+        name_part = self.name + ('*' if self.was_set else '') + ':'
+        return f'{name_part}{"{"}{", ".join([str(x) for x in sorted(self.range)])}{"}"}'
 
     def is_instantiated(self):
         return len(self.range) == 1
 
-    def member_FD(self, a_list: List[Union[FD_Var, int, str]]):
-        """ Is v in a_list?  """
-        # If a_list is empty, it can't have a member. So fail.
-        if not a_list: return
-
-        # yield from self.set_value(a_list[0])
-        yield from FD_Var.unify_FD(self, a_list[0])
-        yield from self.member_FD(a_list[1:])
-
-    def propagate_value(self, value):
-        for v in All_Different.sibs_dict[self]:
-            v.update_range(v.range - {value})
-
-    def set_value(self, new_value: Union[float, int, str]):
-        self.update_range({new_value}, True)
-        if FD_Var.propagate:
-            self.propagate_value(new_value)
+    def set_value(self, other_var: Var_FD):
+        common = self.range & other_var.range
+        if len(common) != 1: return
+        self.update_range(common, True)
+        if Var_FD.propagate:
+            new_value = list(common)[0]
+            All_Different.propagate_value(self, new_value)
         yield
         self.undo_update_range()
-        if FD_Var.propagate:
-            self.undo_propagate_value()
-
-    def undo_propagate_value(self):
-        for v in All_Different.sibs_dict[self]:
-            v.undo_update_range()
+        if Var_FD.propagate:
+            All_Different.undo_propagate_value(self)
 
     def undo_update_range(self):
         (self.range, self.was_set) = self.range_was_set_stack[-1]
         self.range_was_set_stack = self.range_was_set_stack[:-1]
-
-    @staticmethod
-    def unify_FD(v1: Union[FD_Var, float, int, str], v2: Union[FD_Var, float, int, str]):
-        yield from v1.set_value(v2) if isinstance(v1, FD_Var) else v2.set_value(v1)
 
     def update_range(self, new_range, was_set=False):
         self.range_was_set_stack = self.range_was_set_stack + [(self.range, self.was_set)]
@@ -108,135 +107,96 @@ class FD_Var:
         return list(self.range)[0] if self.is_instantiated() else None
 
 
-class FD_Solver:
+class Const_FD(Var_FD):
+    """ A class of objects whose ranges are constant. """
 
-    def __init__(self, vars, constraints=None):
+    id = 0
+
+    def __init__(self, init_range, name=None):
+        super().__init__(init_range, name)
+
+
+class Solver_FD:
+
+    def __init__(self, vars, narrow=None, constraints=None, trace=False):
         self.constraints = set() if constraints is None else constraints
+        self.depth = self.line_no = 0
+        self.narrow = Solver_FD.pick_one if narrow is None else narrow
+        self.trace = trace
         self.vars = vars
 
     def constraints_satisfied(self):
         return all(constraint() for constraint in self.constraints)
 
     @staticmethod
-    @Trace
-    def show_vars(vars):
-        pass
+    def is_a_subsequence_of(As: List, Zs: List):
+        """
+        As may be spread out in Zs but must be in the same order as in Zs.
+        """
+        if not As:
+            # If no more As to match, we're done. Succeed.
+            yield
+
+        elif not Zs:
+            # If no more Zs to match the remaining As, fail.
+            return
+
+        else:
+            for _ in Solver_FD.unify_FD(As[0], Zs[0]):
+                for _ in Solver_FD.is_a_subsequence_of(As[1:], Zs[1:]):
+                    yield
+
+    @staticmethod
+    def member_FD(var, a_list: List[Union[Var_FD, int, str]]):
+        """ Is v in a_list?  """
+        # If a_list is empty, it can't have a member. So fail.
+        if not a_list: return
+
+        yield from Solver_FD.unify_FD(var, a_list[0])
+        yield from Solver_FD.member_FD(var, a_list[1:])
+
+    @staticmethod
+    def pick_one(vars):
+        not_set_vars: Set[Var_FD] = {v for v in vars if not v.was_set}
+        nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Var_FD.smallest_first else \
+            not_set_vars.pop()
+        for _ in Solver_FD.member_FD(nxt_var, [Const_FD(elt) for elt in nxt_var.range]):
+            yield
+
+    def show_vars(self):
+        self.line_no += 1
+        if self.trace:
+            line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
+            line_str = f'{line_no_str}{".  " * (self.depth + 1)}{Solver_FD.to_str(self.vars)}'
+            print(line_str)
 
     def solve(self):
-        # The following accommodates Trace, which prints the args of traced functions.
-        # At this point we want to show self.vars, but self.vars is not the arg of solve.
-        # So we use an artificial function, pass it self.vars as an arg, and Trace it
-        # rather than Tracing solve.
-
-        FD_Solver.show_vars(self.vars)
-
+        # If any vars have an empty range, the solver has reached a dead end. Fail.
         if any(not v.range for v in self.vars): return
-        # elif not All_Different.all_satisfied(): return
+
+        # If any constraints are not satisfied, Fail.
         elif not self.constraints_satisfied(): return
+
+        # If all variables are instanatiated, we have a solution. Yield.
         elif all(v.is_instantiated() for v in self.vars): yield
+
+        # Otherwise, show_vars and instantiate a variable.
         else:
-            not_set_vars: Set[FD_Var] = {v for v in self.vars if not v.was_set}
-            nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if FD_Var.smallest_first else \
-                      not_set_vars.pop()
-            for _ in nxt_var.member_FD(list(nxt_var.range)):
+            self.show_vars()
+            self.depth += 1
+            for _ in self.narrow(self.vars):
                 yield from self.solve()
+            self.depth -= 1
 
-    # @staticmethod
-    # @Trace
-    # def solve(vars: Set[FD_Var]):
-    #     if any(not v.range for v in vars): return
-    #     elif not All_Different.all_satisfied(): return
-    #     elif all(v.is_instantiated() for v in vars): yield
-    #     else:
-    #         not_set_vars: Set[FD_Var] = {v for v in vars if not v.was_set}
-    #         nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if FD_Var.smallest_first else \
-    #                   not_set_vars.pop()
-    #         for _ in nxt_var.member_FD(list(nxt_var.range)):
-    #             yield from FD_Solver.solve(vars)
+    @staticmethod
+    def to_str(xs):
+        if type(xs) in [frozenset, list, set, tuple]:
+            xs_string = ", ".join(Solver_FD.to_str(x) for x in xs)
+        else:
+            xs_string = str(xs)
+        return xs_string
 
-
-# ##    ################################### Not currently used ###################################    ##
-#
-# def ensure_is_FD_Var(x: Union[FD_Var, int, str]) -> FD_Var:
-#     """
-#       Applied to each argument in a Structure.
-#       Applies PyValue to those that are not already Terms.
-#       If x is not a logic variable, i.e., an instance of Term, it must be a Python value.
-#       Wrap it in PyValue. (It must be immutable.)
-#     """
-#     return x if isinstance(x, FD_Var) else FD_Var({x})
-#
-#
-# def flatten_sets_to_set(sets):
-#     return {elt for set in sets for elt in set}
-#
-#
-# @euc
-# def unify_FD_FD(left: FD_Var, right: FD_Var):
-#     """
-#     Unify two FD_Vars or constants.
-#
-#     The strategy is to keep track of the "unification unification_chain" for all variables.
-#
-#     The unification unification_chain is a linked list of logic variables, which are all unified.
-#
-#     The final element on the unification_chain is either
-#     o a non-Var, in which case the value of all preceding variables is the value of that non-Var, or
-#     o a Var (which is not linked to any further element), in which case, all variables on the unification_chain
-#       are unified but do not (yet) have a value.
-#     """
-#
-#     # Make sure both Left and other are logic variables. This allows us to call, e.g, unify_FD(X, 'abc').
-#     # ensure_is_logic_variable will wrap 'abc' in a PyValue.
-#     (left, right) = map(ensure_is_FD_Var, (left, right))
-#     range_intersection = left.range & right.range
-#     if not range_intersection: return
-#
-#     left.unification_chain_next = left.unification_chain_next = FD_Var(range_intersection)
-#     yield
-#     left.unification_chain_next = left.unification_chain_next = None
-
-    # if self.value() is not None and self.value() == other.value():
-    #     yield
-    #
-    # # The rest consists of special cases: both PyValues, both Structures, at least one Var.
-    #
-    # # Case 1. Both are PyValues, and exactly one is instantiated.
-    # # "Assign" it's value to the other. This is similar to (but simpler than)
-    # # how we handle two Var's. But instead of building a unification_chain, we "assign"
-    # # one value to the other.
-    # elif isinstance(Left, PyValue) and isinstance(other, PyValue) and \
-    #     (not Left.is_instantiated() or not other.is_instantiated()) and \
-    #     (Left.is_instantiated() or other.is_instantiated()):
-    #     (assignedTo, assignedFrom) = (Left, other) if other.is_instantiated() else (other, Left)
-    #     assignedTo._set_py_value(assignedFrom.get_py_value())
-    #     yield
-    #     # See discussion in unify_FD below for why we do this.
-    #     assignedTo._set_py_value(None)
-    #     #
-    #     # # If they are both PyValues, treat specially.
-    #     # yield from unify_FD_PyValues(Left, other)
-    #
-    #     # # Case 2. Both  Structures. They can be unified if
-    #     # # (a) they have the same functor and
-    #     # # (b) their arguments can be unified.
-    #     # elif isinstance(Left, Structure) and isinstance(other, Structure) and Left.functor == other.functor:
-    #     #     yield from unify_FD_sequences(Left.args, other.args)
-    #     #
-    #     # # Case 3. At least one is a Var. Since we use @euc, it's the end of its unification_chain.
-    #     # # Make the other an extension of its unification_chain.
-    #     # # (If both are Vars, it makes no functional difference which extends which.)
-    #     # elif isinstance(Left, Var) or isinstance(other, Var):
-    #     #     (pointsFrom, pointsTo) = (Left, other) if isinstance(Left, Var) else (other, Left)
-    #     #     pointsFrom.unification_chain_next = pointsTo
-    #     #     yield
-    #
-    #     # All yields create a context in which more of the program is executed--like
-    #     # the body of a while-loop or a for-loop. A "next()" request asks for alternatives.
-    #     # But there is only one functional way to do unification. So on "backup," unlink the
-    #     # two and exit without a further yield, i.e., fail.
-    #
-    #     # This is fundamental! It's what makes it possible for a Var to become un-unified outside
-    #     # the context in which it was unified, e.g., unify_FDing a Var with (successive) members
-    #     # of a list. The first successful unification must be undone before the second can occur.
-    #     pointsFrom.unification_chain_next = None
+    @staticmethod
+    def unify_FD(v1: Var_FD, v2: Var_FD):
+        # Call set_value on the argument that is an Var_FD.
+        yield from v1.set_value(v2) if type(v1) == Var_FD else v2.set_value(v1)

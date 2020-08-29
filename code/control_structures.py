@@ -188,17 +188,18 @@ class Trace:
   @staticmethod
   def to_str(xs):
     if type(xs) in [frozenset, list, set, tuple]:
-      # (left, right) = ('[', ']') if isinstance(xs, list) else ('(', ')')
-      # xs_string = f'{left}{", ".join(Trace.to_str(x) for x in xs)}{right}'
-      xs_string = ", ".join(Trace.to_str(x) for x in xs)
+      (left, right) = {frozenset: ('{', '}'), list: ('[', ']'), set: ('{', '}'), tuple: ('(', ')')}[type(xs)]
+      xs_string = f'{left}{", ".join(Trace.to_str(x) for x in xs)}{right}'
+      # xs_string = ", ".join(Trace.to_str(x) for x in xs)
     else:
       xs_string = str(xs)
     return xs_string
 
   def trace_line(self, args):
-    prefix = f'{" " if Trace.line_no < 10 else ""} {Trace.line_no} {"  " * self.depth}'
-    params = ", ".join([f'{param_name}: {Trace.to_str(arg)}'
-                        for (param_name, arg) in zip(self.param_names, args)])
+    """ Prints the curent state of the vars, assuming args is the vars"""
+    prefix = f'{" " if Trace.line_no < 10 else ""}{Trace.line_no}. {"  " * (self.depth-1)}'
+    # params = ", ".join([f'{param_name}: {Trace.to_str(arg)}'
+    params = ", ".join([f'{Trace.to_str(arg)}' for arg in args])
     # Special case for the transversal functions
     termination = ' <=' if not args[0] else ''
     return prefix + params + termination
