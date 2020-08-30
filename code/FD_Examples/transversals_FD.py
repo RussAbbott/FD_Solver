@@ -17,36 +17,46 @@ def gen_sets(nbr_sets=5):
     return sets
 
 
+def set_up_for_transversals(sets):
+    """ Set up the solver and All_Different for the transversals problem. """
+    Var_FD.id = 0
+    All_Different.sibs_dict = {}
+    # Create a Var_FD for each set. Its initial range is the entire set.
+    vars = {Var_FD(s.range) for s in sets}
+    All_Different(vars)
+    trace = Solver_FD.propagate and Solver_FD.smallest_first
+    solver_fd = Solver_FD(vars, constraints={All_Different.all_satisfied}, trace=trace)
+    if solver_fd.trace:
+        print(f'{"~" * 90}\n')
+        print(Solver_FD.to_str(sets))
+        print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first};\n')
+    return solver_fd
+
+
 if __name__ == '__main__':
     sets = gen_sets()
-    sol_str_set_0 = set()
+    solution_count = None
     print('\n', Solver_FD.to_str(sets), '\n')
+
     for Solver_FD.propagate in [False, True]:
         for Solver_FD.smallest_first in [False, True]:
-            Var_FD.id = 0
-            All_Different.sibs_dict = {}
-            # Create an FV_Var for each set
-            vars = {Var_FD(set.range) for set in sets}
-            All_Different(vars)
-            trace = Solver_FD.propagate and Solver_FD.smallest_first
-            solver_fd = Solver_FD(vars, constraints={All_Different.all_satisfied}, trace=trace)
-            sol_str_set_n = set()
-            if solver_fd.trace:
-                print(f'{"~" * 90}\n')
-                print(Solver_FD.to_str(vars))
-                print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first};\n')
-            for _ in solver_fd.solve():
-                sol_string = Solver_FD.to_str(vars)
-                sol_str_set_n |= {sol_string}
-                solutions_nbr = len(sol_str_set_n)
-                sol_nbr_str = f'{" " if solutions_nbr < 10 else ""}{solutions_nbr}'
-                if solver_fd.trace:  print(f"\t\t=>\t{sol_nbr_str}. {sol_string}\n")
+            solver_fd = set_up_for_transversals(sets)
+            sol_str_set = set()
 
-            if len(sol_str_set_0) != len(sol_str_set_n):
-                for (n, s) in enumerate(sorted(sol_str_set_n)):
+            for _ in solver_fd.solve():
+                sol_string = Solver_FD.to_str(solver_fd.vars)
+                sol_str_set |= {sol_string}
+                if solver_fd.trace:
+                    solutions_nbr = len(sol_str_set)
+                    sol_nbr_str = f'{" " if solutions_nbr < 10 else ""}{solutions_nbr}'
+                    print(f"\t\t=>\t{sol_nbr_str}. {sol_string}\n")
+
+            if solution_count != len(sol_str_set):
+                for (n, s) in enumerate(sorted(sol_str_set)):
                     print(f'{" " if n < 9 else ""}{n+1}. {s}')
                 print()
-                sol_str_set_0 = sol_str_set_n
+                solution_count = len(sol_str_set)
+
             print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first}; '
-                  f'solutions: {len(sol_str_set_n)}; lines: {solver_fd.line_no}')
-            if solver_fd.trace and not sol_str_set_0: print(f'{"_" * 90}\n{"^" * 90}\n')
+                  f'solutions: {solution_count}; lines: {solver_fd.line_no}')
+    print(f'{"_" * 90}\n{"^" * 90}\n')
