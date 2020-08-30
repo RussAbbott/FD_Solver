@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import List, Set, Union
 
 
@@ -7,8 +8,9 @@ class All_Different:
     """ Each All_Different object is a collection of FD_Vars that must be different. """
 
     # sibs_dict is a dictionary. Each key is an FD_Var's; the value is a set of FD_Var's that must differ from it.
+    # sibs_dict is a dictionary of siblings, where a sibling must have a different value.
     # sibs_dict = {FD_Var_x: {FD_Var_i that must be different from FD_Var_x}}
-    # sibs_dict  is aggregated from the All_Different declarations.
+    # sibs_dict is aggregated from the All_Different declarations.
     sibs_dict = {}
 
     def __init__(self, vars: Set[Var_FD]):
@@ -49,10 +51,8 @@ class All_Different:
 
 class Var_FD:
     """ A Finite Domain variable """
+    
     id = 0
-
-    propagate = False
-    smallest_first = False
 
     def __init__(self, init_range=None, name=None):
         cls = self.__class__
@@ -63,10 +63,11 @@ class Var_FD:
 
         self.range = set() if init_range is None else  \
                      {init_range} if type(init_range) in [int, str, float] else \
-                     init_range
+                     set(init_range)
 
         self.range_was_set_stack = []
         self.was_set = False
+        
         self.unification_chain_next = None
 
     def __eq__(self, other: Var_FD):
@@ -79,19 +80,19 @@ class Var_FD:
         name_part = self.name + ('*' if self.was_set else '') + ':'
         return f'{name_part}{"{"}{", ".join([str(x) for x in sorted(self.range)])}{"}"}'
 
-    def is_instantiated(self):
+    def has_a_value(self):
         return len(self.range) == 1
 
     def set_value(self, other_var: Var_FD):
         common = self.range & other_var.range
         if len(common) != 1: return
         self.update_range(common, True)
-        if Var_FD.propagate:
+        if Solver_FD.propagate:
             new_value = list(common)[0]
             All_Different.propagate_value(self, new_value)
         yield
         self.undo_update_range()
-        if Var_FD.propagate:
+        if Solver_FD.propagate:
             All_Different.undo_propagate_value(self)
 
     def undo_update_range(self):
@@ -104,7 +105,7 @@ class Var_FD:
         self.was_set = self.was_set or was_set
 
     def value(self):
-        return list(self.range)[0] if self.is_instantiated() else None
+        return list(self.range)[0] if self.has_a_value() else None
 
 
 class Const_FD(Var_FD):
@@ -118,15 +119,27 @@ class Const_FD(Var_FD):
 
 class Solver_FD:
 
+    propagate = False
+    smallest_first = False
+
     def __init__(self, vars, narrow=None, constraints=None, trace=False):
         self.constraints = set() if constraints is None else constraints
         self.depth = self.line_no = 0
-        self.narrow = Solver_FD.pick_one if narrow is None else narrow
+        self.narrow = Solver_FD.instantiate_a_var if narrow is None else narrow
         self.trace = trace
         self.vars = vars
 
     def constraints_satisfied(self):
         return all(constraint() for constraint in self.constraints)
+
+    @staticmethod
+    def instantiate_a_var(vars):
+        not_set_vars: Set[Var_FD] = {v for v in vars if not v.was_set}
+        nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Solver_FD.smallest_first else \
+                  not_set_vars.pop()
+        # Sort nxt_var.range so that it will be more intuitive to trace. Makes no functional difference.
+        for _ in Solver_FD.member_FD(nxt_var, [Const_FD(elt) for elt in sorted(nxt_var.range)]):
+            yield
 
     @staticmethod
     def is_a_subsequence_of(As: List, Zs: List):
@@ -155,14 +168,6 @@ class Solver_FD:
         yield from Solver_FD.unify_FD(var, a_list[0])
         yield from Solver_FD.member_FD(var, a_list[1:])
 
-    @staticmethod
-    def pick_one(vars):
-        not_set_vars: Set[Var_FD] = {v for v in vars if not v.was_set}
-        nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Var_FD.smallest_first else \
-            not_set_vars.pop()
-        for _ in Solver_FD.member_FD(nxt_var, [Const_FD(elt) for elt in nxt_var.range]):
-            yield
-
     def show_vars(self):
         self.line_no += 1
         if self.trace:
@@ -178,7 +183,7 @@ class Solver_FD:
         elif not self.constraints_satisfied(): return
 
         # If all variables are instanatiated, we have a solution. Yield.
-        elif all(v.is_instantiated() for v in self.vars): yield
+        elif all(v.has_a_value() for v in self.vars): yield
 
         # Otherwise, show_vars and instantiate a variable.
         else:
@@ -190,7 +195,7 @@ class Solver_FD:
 
     @staticmethod
     def to_str(xs):
-        if type(xs) in [frozenset, list, set, tuple]:
+        if isinstance(xs, Iterable):
             xs_string = ", ".join(Solver_FD.to_str(x) for x in xs)
         else:
             xs_string = str(xs)
