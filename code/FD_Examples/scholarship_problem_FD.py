@@ -30,10 +30,6 @@ Students:
     Marie(Phys, 35)
     Emmy(Math, 40)
 
-    =================================================================================================================
-      This and the zebra problem are both written so that they can use either LinkedLists or one of the
-      PySequence options: PyList or PyTuple. Make a choice at the bottom of the file.
-    =================================================================================================================
 """
 
 
