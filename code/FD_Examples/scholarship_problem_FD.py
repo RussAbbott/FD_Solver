@@ -36,6 +36,7 @@ Students:
     =================================================================================================================
 """
 
+
 class Clues_Solver:
     students = None
     line_nbr = 0
@@ -55,24 +56,29 @@ class Clues_Solver:
                           f'clue {clue_number}. {stdnts_print_str}')
                     yield from Clues_Solver.run_all_clues(students, clues, clue_number + 1)
 
+
 def clue_1(Stdnts):
     """ The student who studies Phys gets a smaller scholarship than Emmy. """
     yield from Solver_FD.is_a_subsequence_of(
         [Const_Stdnt(major='Phys'), Const_Stdnt(name='Emmy')], Stdnts)
 
+
 def clue_2(Stdnts):
     """ Emmy studies either Math or Bio. """
     yield from Const_Stdnt(name='Emmy', major={'Bio', 'Math'}).member_FD(Stdnts)
+
 
 def clue_3(Stdnts):
     """ The Stdnt who studies CS has a $5,000 larger scholarship than Lynn. """
     yield from Solver_FD.is_contiguous_in(
         [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS')], Stdnts)
 
+
 def clue_4(Stdnts):
     """ Marie has a $10,000 larger scholarship than Lynn. """
     yield from Solver_FD.is_contiguous_in(
         [Const_Stdnt(name='Lynn'), Const_Stdnt(), Const_Stdnt(name='Marie')], Stdnts)
+
 
 def clue_5(Stdnts):
     """ Ada has a larger scholarship than the Stdnt who studies Bio. """
