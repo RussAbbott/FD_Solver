@@ -33,71 +33,27 @@ Students:
 """
 
 
-class Clues_Solver:
-    students = None
-    line_nbr = 0
-
-    @staticmethod
-    def run_all_clues(students, clues, clue_number):
-        if clue_number >= len(clues):
-            # Ran all the clues. Succeed.
-            yield
-        else:
-            clue = clues[clue_number]
-            for _ in clue(students):
-                if All_Different.all_satisfied():
-                    Clues_Solver.line_nbr += 1
-                    stdnts_print_str = ", ".join(str(std) for std in students)
-                    print(f'{" " if Clues_Solver.line_nbr < 10 else ""}{Clues_Solver.line_nbr}. '
-                          f'clue {clue_number}. {stdnts_print_str}')
-                    yield from Clues_Solver.run_all_clues(students, clues, clue_number + 1)
-
-
-def clue_1(Stdnts):
-    """ The student who studies Phys gets a smaller scholarship than Emmy. """
-    yield from Solver_FD.is_a_subsequence_of(
-        [Const_Stdnt(major='Phys'), Const_Stdnt(name='Emmy')], Stdnts)
-
-
-def clue_2(Stdnts):
-    """ Emmy studies either Math or Bio. """
-    yield from Const_Stdnt(name='Emmy', major={'Bio', 'Math'}).member_FD(Stdnts)
-
-
-def clue_3(Stdnts):
-    """ The Stdnt who studies CS has a $5,000 larger scholarship than Lynn. """
-    yield from Solver_FD.is_contiguous_in(
-        [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS')], Stdnts)
-
-
-def clue_4(Stdnts):
-    """ Marie has a $10,000 larger scholarship than Lynn. """
-    yield from Solver_FD.is_contiguous_in(
-        [Const_Stdnt(name='Lynn'), Const_Stdnt(), Const_Stdnt(name='Marie')], Stdnts)
-
-
-def clue_5(Stdnts):
-    """ Ada has a larger scholarship than the Stdnt who studies Bio. """
-    yield from Solver_FD.is_a_subsequence_of(
-        [Const_Stdnt(major='Bio'), Const_Stdnt(name='Ada')], Stdnts)
-
-
 class Stdnt(Var_FD):
     id = 0
 
     names = frozenset({'Ada', 'Emmy', 'Lynn', 'Marie'})
     majors = frozenset({'Bio', 'CS', 'Math', 'Phys'})
 
-    def __init__(self, name=None, major=None, scholarship=None):
+    def __init__(self, name=None, major=None):
         self.name = Var_FD(Stdnt.names if name is None else name)
         self.major = Var_FD(Stdnt.majors if major is None else major)
+        self.scholarship = None
 
         super().__init__()
 
     def __str__(self):
-        name_str = "_" if len(self.name.range) == len(Stdnt.names) else "-".join(self.name.range)
-        major_str = "_" if len(self.major.range) == len(Stdnt.majors) else "-".join(self.major.range)
-        return f'{name_str}/{major_str}'
+        name_str = "-".join(self.name.range) + ('*' if self.name.was_set else '')
+        major_str = "-".join(self.major.range) + ('*' if self.major.was_set else '')
+        scholarship_str = '' if self.scholarship is None else f'(${self.scholarship},000)'
+        return f'{name_str}/{major_str}{scholarship_str}'
+
+    def is_instantiated(self):
+        return self.name.has_a_value() and self.major.has_a_value()
 
     def narrow_range(self, new_value: Stdnt):
         """ Must do both name and major """
@@ -105,7 +61,7 @@ class Stdnt(Var_FD):
             yield from self.major.narrow_range(new_value.major)
 
     @staticmethod
-    def stdnts_print_str(students):
+    def stdnts_to_string(students):
         return ", ".join(str(std) for std in students)
 
 
@@ -123,6 +79,68 @@ class Const_Stdnt(Stdnt):
         else: return
 
 
+class Clues_Solver(Solver_FD):
+    # students = None
+
+    def __init__(self, students, clues, clue_number=0):
+        super().__init__(students)
+        self.clues = clues
+        self.clue_number = clue_number
+        self.students = self.vars
+
+    def run_all_clues(self):
+        if self.clue_number >= len(self.clues):
+            # Ran all the clues. Succeed.
+            yield
+        # This is commented out because it's possible for all the students
+        # to be instantiated but fail a clue that hasn't been applied.
+        # elif all(stdnt.is_instantiated() for stdnt in self.students):
+        #     yield
+        else:
+            clue = self.clues[self.clue_number]
+            for _ in clue(self.students):
+                if All_Different.all_satisfied():
+                    self.line_no += 1
+                    print(f'{" " if self.line_no < 10 else ""}{self.line_no}. '
+                          f'({clue.__name__}) {Stdnt.stdnts_to_string(self.students)}')
+                    self.clue_number += 1
+                    yield from self.run_all_clues()
+                    self.clue_number -= 1
+
+
+def clue_1(Stdnts):
+    """ The student who studies Phys gets a smaller scholarship than Emmy. """
+    yield from Solver_FD.is_a_subsequence_of(
+        [Const_Stdnt(major='Phys'), Const_Stdnt(name='Emmy')], Stdnts)
+
+
+def clue_2(Stdnts):
+    """ Emmy studies either Math or Bio. """
+    yield from Const_Stdnt(name='Emmy', major={'Bio', 'Math'}).member_FD(Stdnts)
+
+
+# def clue_3(Stdnts):
+#     """ The Stdnt who studies CS has a $5,000 larger scholarship than Lynn. """
+#     yield from Solver_FD.is_contiguous_in(
+#         [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS')], Stdnts)
+
+
+def clue_3(Stdnts):
+    """
+    Combine clues 3 and 4 into a single clue.
+    The Stdnt who studies CS has a $5,000 larger scholarship than Lynn.
+    Marie has a $10,000 bigger scholarship than Lynn.
+    """
+    yield from Solver_FD.is_contiguous_in(
+        [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS'), Const_Stdnt(name='Marie')], Stdnts)
+
+
+def clue_4(Stdnts):
+    """ Ada has a larger scholarship than the Stdnt who studies Bio. """
+    yield from Solver_FD.is_a_subsequence_of(
+        [Const_Stdnt(major='Bio'), Const_Stdnt(name='Ada')], Stdnts)
+
+
 if __name__ == '__main__':
     students = [Stdnt(name=Stdnt.names, major=Stdnt.majors) for _ in range(4)]
 
@@ -134,10 +152,20 @@ if __name__ == '__main__':
     All_Different(name_vars)
     All_Different(major_vars)
 
-    clues = [0, clue_1, clue_2, clue_3, clue_4, clue_5]
+    # Do clue_3 first since it sets 3 things.
+    # clues 1 and 4 set two things each. Their order doesn't matter.
+    # If clue_1 is not included, can get all instantiated but in violation of clue_1.
+    clues = [clue_3, clue_4, clue_2, clue_1]
 
     print()
     print('Students:', ', '.join(sorted(Stdnt.names)))
     print('Majors:', ', '.join(sorted(Stdnt.majors)), '\n')
-    for _ in Clues_Solver.run_all_clues(students, clues, 1):
-        print(f'\nSolution: {Stdnt.stdnts_print_str(students)}')
+
+    clues_solver = Clues_Solver(students, clues)
+    for _ in clues_solver.run_all_clues():
+        for (i, std) in enumerate(students):
+            std.scholarship = 25 + 5*i
+        print(f'\nSolution: {Stdnt.stdnts_to_string(students)}\n')
+        for (i, std) in enumerate(students):
+            std.scholarship = None
+    print('\nNo other solutions')
