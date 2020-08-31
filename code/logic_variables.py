@@ -279,31 +279,6 @@ class Var(Term):
     return self.unification_chain_next.unification_chain_end( ) if self._has_unification_chain_next( ) else self
 
 
-# class Var_FD(Var):
-#   """
-#   A Finite Domain variable
-#   """
-#
-#   def __init__(self, name=None, init_range=None):
-#     # self.unification_chain_next points to the next element on the unification_chain, if any.
-#     self.name = name
-#     self.range = init_range
-#     self.range_stack = []
-#     super().__init__()
-#
-#   def __str__(self):
-#     name_part = self.name + ': ' if self.name is not None else ''
-#     return f'{name_part}{self.range}' if self.range is not None else super().__str__()
-#
-#   def undo_update(self):
-#     self.range = self.range_stack[-1]
-#     self.range_stack = self.range_stack[:-1]
-#
-#   def update_range(self, new_range):
-#     self.range_stack.append(self.range)
-#     self.range = new_range
-#
-#
 def ensure_is_logic_variable(x: Any) -> Term:
   """
     Applied to each argument in a Structure.
@@ -408,10 +383,6 @@ def unify_pairs(tuples: List[Tuple[Any, Any]]):
     # If they unify, go on to the rest of the tuples list.
     for _ in unify(Left, Right):
       yield from unify_pairs(restOfTuples)
-    # The preceding is equivalent to the following.
-    # for _ in forall([lambda: unify(Left, Right),
-    #                  lambda: unify_pairs(restOfTuples)]):
-    #   yield
 
 
 def unify_sequences(seq_1: Sequence, seq_2: Sequence):
