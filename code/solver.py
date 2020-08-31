@@ -187,23 +187,6 @@ class Solver_FD:
         yield from Solver_FD.unify_pairs_FD(zip(As, Zs))
         yield from Solver_FD.is_contiguous_in(zip(As, Zs[1:]))
 
-    # @staticmethod
-    # def member_FD(var, a_list: List[Union[Var_FD, int, str]]):
-    #     """ Is v in a_list?  """
-    #     # If a_list is empty, it can't have a member. So fail.
-    #     if not a_list: return
-    #
-    #     yield from var.narrow_range(a_list[0])
-    #     yield from Solver_FD.member_FD(var, a_list[1:])
-
-    # def member_FD(self, a_list: List[Union[Var_FD, int, str]]):
-    #     """ Is v in a_list?  """
-    #     # If a_list is empty, it can't have a member. So fail.
-    #     if not a_list: return
-    #
-    #     yield from self.narrow_range(a_list[0])
-    #     yield from self.member_FD(a_list[1:])
-    #
     def show_vars(self):
         self.line_no += 1
         if self.trace:
@@ -236,11 +219,6 @@ class Solver_FD:
         else:
             xs_string = str(xs)
         return xs_string
-
-    # @staticmethod
-    # def unify_FD(v1: Var_FD, v2: Var_FD):
-    #     # Call narrow_range on the argument that is an Var_FD.
-    #     yield from v1.narrow_range(v2)   # if type(v1) == Var_FD else v2.narrow_range(v1)
 
     @staticmethod
     def unify_pairs_FD(tuples: List[Tuple[Var_FD, Var_FD]]):
