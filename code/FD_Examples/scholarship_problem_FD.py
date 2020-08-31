@@ -80,32 +80,41 @@ class Const_Stdnt(Stdnt):
 
 
 class Clues_Solver(Solver_FD):
-    # students = None
 
-    def __init__(self, students, clues, clue_number=0):
+    def __init__(self, students, clues, clue_index=0):
         super().__init__(students)
         self.clues = clues
-        self.clue_number = clue_number
+        self.clue_index = clue_index
         self.students = self.vars
 
+    # def narrow(self):
+    #     yield from self.run_a_clue()
+    #
     def run_all_clues(self):
-        if self.clue_number >= len(self.clues):
+        if self.clue_index >= len(self.clues):
             # Ran all the clues. Succeed.
             yield
-        # This is commented out because it's possible for all the students
+
+        # The following is commented out because it's possible for all students
         # to be instantiated but fail a clue that hasn't been applied.
         # elif all(stdnt.is_instantiated() for stdnt in self.students):
         #     yield
         else:
-            clue = self.clues[self.clue_number]
-            for _ in clue(self.students):
-                if All_Different.all_satisfied():
-                    self.line_no += 1
-                    print(f'{" " if self.line_no < 10 else ""}{self.line_no}. '
-                          f'({clue.__name__}) {Stdnt.stdnts_to_string(self.students)}')
-                    self.clue_number += 1
-                    yield from self.run_all_clues()
-                    self.clue_number -= 1
+            yield from self.run_a_clue()
+
+    def run_a_clue(self):
+        clue = self.clues[self.clue_index]
+        for _ in clue(self.students):
+            if All_Different.all_satisfied():
+                self.line_no += 1
+                clue_name = clue.__name__
+                print(f'{" " if self.line_no < 10 else ""}{self.line_no}.'
+                      f'{" "*(10-len(clue_name))}({clue_name}) '
+                      f'{". "*(self.clue_index+1)}'
+                      f'{Stdnt.stdnts_to_string(self.students)}')
+                self.clue_index += 1
+                yield from self.run_all_clues()
+                self.clue_index -= 1
 
 
 def clue_1(Stdnts):
@@ -125,7 +134,7 @@ def clue_2(Stdnts):
 #         [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS')], Stdnts)
 
 
-def clue_3(Stdnts):
+def clues_3_4(Stdnts):
     """
     Combine clues 3 and 4 into a single clue.
     The Stdnt who studies CS has a $5,000 larger scholarship than Lynn.
@@ -135,7 +144,7 @@ def clue_3(Stdnts):
         [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS'), Const_Stdnt(name='Marie')], Stdnts)
 
 
-def clue_4(Stdnts):
+def clue_5(Stdnts):
     """ Ada has a larger scholarship than the Stdnt who studies Bio. """
     yield from Solver_FD.is_a_subsequence_of(
         [Const_Stdnt(major='Bio'), Const_Stdnt(name='Ada')], Stdnts)
@@ -155,11 +164,23 @@ if __name__ == '__main__':
     # Do clue_3 first since it sets 3 things.
     # clues 1 and 4 set two things each. Their order doesn't matter.
     # If clue_1 is not included, can get all instantiated but in violation of clue_1.
-    clues = [clue_3, clue_4, clue_2, clue_1]
+    clues = [clues_3_4, clue_5, clue_2, clue_1]
 
-    print()
-    print('Students:', ', '.join(sorted(Stdnt.names)))
-    print('Majors:', ', '.join(sorted(Stdnt.majors)), '\n')
+    print('\nStudents:', ', '.join(sorted(Stdnt.names)))
+    print('Majors:', ', '.join(sorted(Stdnt.majors)))
+    print(""" The original clues
+    1. The student who studies Phys gets a smaller scholarship than Emmy.
+    2. Emmy studies either Bio or Math.
+    3. The student who studies CS has a $5,000 bigger scholarship than Lynn.
+    4. Marie has a $10,000 bigger scholarship than Lynn.
+    5. Ada has a bigger scholarship than the student who studies Bio.
+    
+    Clues 3 and 4 are run together as a single clue called 'clues_3_4'.
+""")
+    print('The following clues ordering is most effective:\n\t', ', '.join([clue.__name__ for clue in clues]), '\n')
+
+    print('An "*" after a name means the name has been explicitly set '
+          'and propagated through the all-different constraints.\n')
 
     clues_solver = Clues_Solver(students, clues)
     for _ in clues_solver.run_all_clues():
