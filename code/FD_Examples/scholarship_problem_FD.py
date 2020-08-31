@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from solver import All_Different, Solver_FD, Var_FD
 
-from typing import List, Union
-
 """
 A puzzle from GeekOverdose: https://geekoverdose.wordpress.com/2015/10/31/solving-logic-puzzles-in-prolog-puzzle-1-of-3/
 A relatively simple puzzle of this genre.
@@ -38,16 +36,24 @@ Students:
     =================================================================================================================
 """
 
+class Clues_Solver:
+    students = None
+    line_nbr = 0
 
-def run_all_clues(students, clues, clue_number=0):
-    if clue_number >= len(clues):
-        # Ran all the clues. Succeed.
-        yield
-    else:
-        clue = clues[clue_number]
-        for _ in clue(students):
-            if All_Different.all_satisfied():
-                yield from run_all_clues(students, clues, clue_number + 1)
+    @staticmethod
+    def run_all_clues(students, clues, clue_number):
+        if clue_number >= len(clues):
+            # Ran all the clues. Succeed.
+            yield
+        else:
+            clue = clues[clue_number]
+            for _ in clue(students):
+                if All_Different.all_satisfied():
+                    Clues_Solver.line_nbr += 1
+                    stdnts_print_str = ", ".join(str(std) for std in students)
+                    print(f'{" " if Clues_Solver.line_nbr < 10 else ""}{Clues_Solver.line_nbr}. '
+                          f'clue {clue_number}. {stdnts_print_str}')
+                    yield from Clues_Solver.run_all_clues(students, clues, clue_number + 1)
 
 def clue_1(Stdnts):
     """ The student who studies Phys gets a smaller scholarship than Emmy. """
@@ -56,22 +62,22 @@ def clue_1(Stdnts):
 
 def clue_2(Stdnts):
     """ Emmy studies either Math or Bio. """
-    yield from Solver_FD.member_FD(Stdnt(name='Emmy', major=Var_FD({'Bio', 'Math'})), Stdnts)
+    yield from Const_Stdnt(name='Emmy', major={'Bio', 'Math'}).member_FD(Stdnts)
 
 def clue_3(Stdnts):
     """ The Stdnt who studies CS has a $5,000 larger scholarship than Lynn. """
     yield from Solver_FD.is_contiguous_in(
-        [Stdnt(name='Lynn'), Stdnt(major='CS')], Stdnts)
+        [Const_Stdnt(name='Lynn'), Const_Stdnt(major='CS')], Stdnts)
 
 def clue_4(Stdnts):
     """ Marie has a $10,000 larger scholarship than Lynn. """
     yield from Solver_FD.is_contiguous_in(
-        [Stdnt(name='Lynn'), Stdnt(), Stdnt(name='Marie')], Stdnts)
+        [Const_Stdnt(name='Lynn'), Const_Stdnt(), Const_Stdnt(name='Marie')], Stdnts)
 
 def clue_5(Stdnts):
     """ Ada has a larger scholarship than the Stdnt who studies Bio. """
     yield from Solver_FD.is_a_subsequence_of(
-        [Stdnt(major='Bio'), Stdnt(name='Ada')], Stdnts)
+        [Const_Stdnt(major='Bio'), Const_Stdnt(name='Ada')], Stdnts)
 
 
 class Stdnt(Var_FD):
@@ -87,38 +93,49 @@ class Stdnt(Var_FD):
         super().__init__()
 
     def __str__(self):
-        return f'{self.var_name}<{self.name}/{self.major}>'
+        name_str = "_" if len(self.name.range) == len(Stdnt.names) else "-".join(self.name.range)
+        major_str = "_" if len(self.major.range) == len(Stdnt.majors) else "-".join(self.major.range)
+        return f'{name_str}/{major_str}'
 
     def narrow_range(self, new_value: Stdnt):
-        """ Must do both values """
-        ...
+        """ Must do both name and major """
+        for _ in self.name.narrow_range(new_value.name):
+            yield from self.major.narrow_range(new_value.major)
 
     @staticmethod
-    def unify_FD(v1: Stdnt, v2: Stdnt):
-        yield from v1.narrow_range(v2) if isinstance(v1, Stdnt) and not isinstance(v1, Const_Stdnt) else v2.narrow_range(v1)
+    def stdnts_print_str(students):
+        return ", ".join(str(std) for std in students)
 
 
-class Const_Stdnt(Var_FD):
+
+class Const_Stdnt(Stdnt):
 
     def __init__(self, name=None, major=None):
         super().__init__(name, major)
         self.var_name = 'CS' + self.var_name[1:]
-        print(self)
+
+    def narrow_range(self, new_value: Stdnt):
+        """ If we are a Const_Stdnt, and new_value is a Stdnt, turn the args around. """
+        if type(new_value) == Stdnt:
+            yield from new_value.narrow_range(self)
+        else: return
 
 
 if __name__ == '__main__':
     students = [Stdnt(name=Stdnt.names, major=Stdnt.majors) for _ in range(4)]
 
-    print('\n'.join([str(std) for std in students]))
-
     name_vars = {std.name for std in students}
     major_vars = {std.major for std in students}
+    Solver_FD.propagate = True
 
     All_Different.sibs_dict = {}
     All_Different(name_vars)
     All_Different(major_vars)
 
-    clues = [clue_1, clue_2, clue_3, clue_4, clue_5]
+    clues = [0, clue_1, clue_2, clue_3, clue_4, clue_5]
 
-    for _ in run_all_clues(students, clues, 0):
-        print(students)
+    print()
+    print('Students:', ', '.join(sorted(Stdnt.names)))
+    print('Majors:', ', '.join(sorted(Stdnt.majors)), '\n')
+    for _ in Clues_Solver.run_all_clues(students, clues, 1):
+        print(f'\nSolution: {Stdnt.stdnts_print_str(students)}')
