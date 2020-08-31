@@ -61,17 +61,24 @@ class Var_FD:
         cls_first_letter = str(cls).split('.')[1][0]
         self.var_name = var_name if var_name else cls_first_letter + str(cls.id)
 
+        # init_range may be None, a single value, or an iterable collection of values
         self.range = None if init_range is None else  \
                      {init_range} if type(init_range) in [int, str, float] else \
                      set(init_range)
 
+        # self.range_was_set_stack stores previous values of range and was_set
+        # when a new value is assigned. Used for backtracking.
         self.range_was_set_stack = []
+
+        # Set to True when this Var_FD is assigned a single value--and hence that value
+        # is propagated through the other Var_FD's that must be distict from this one.
         self.was_set = False
-        
+
+        # So far not used. Haven't needed unification yet.
         self.unification_chain_next = None
 
     def __eq__(self, other: Var_FD):
-        return self.id == other.id
+        return self.id == other.id and type(self) == type(other)
 
     def __hash__(self):
         return hash(self.id)
@@ -84,7 +91,7 @@ class Var_FD:
         return len(self.range) == 1
 
     def member_FD(self, a_list: List[Union[Var_FD, int, str]]):
-        """ Is v in a_list?  """
+        """ Is self in a_list?  """
         # If a_list is empty, it can't have a member. So fail.
         if not a_list: return
 
@@ -92,6 +99,10 @@ class Var_FD:
         yield from self.member_FD(a_list[1:])
 
     def narrow_range(self, other_var: Var_FD):
+        """
+        Should be called with the Var_FD as the subject. other_var may be a Const_Var.
+        Limit the self.range by other_var.range.
+        """
         common = self.range & other_var.range
         if len(common) == 0: return
         single_value = len(common) == 1 and not self.was_set
@@ -126,7 +137,10 @@ class Const_FD(Var_FD):
         super().__init__(init_range, var_name)
 
     def narrow_range(self, other_var: Var_FD):
-        """ Should be called with the Var_FD as the subject. """
+        """
+        Should be called with the Var_FD as the subject. other_var may be a Const_Var.
+        If the args are reversed, call again with the args in the right order.
+        """
         if type(other_var) == Var_FD:
             yield from other_var.narrow_range(self)
         else: return
@@ -141,16 +155,14 @@ class Solver_FD:
         self.constraints = constraints
         self.depth = 0
         self.line_no = 0
-        self.narrow = Solver_FD.instantiate_a_var if narrow is None else narrow
         self.trace = trace
         self.vars = vars
 
     def constraints_satisfied(self):
         return all(constraint() for constraint in self.constraints)
 
-    @staticmethod
-    def instantiate_a_var(vars):
-        not_set_vars: Set[Var_FD] = {v for v in vars if not v.was_set}
+    def instantiate_a_var(self):
+        not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_set}
         nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Solver_FD.smallest_first else \
                   not_set_vars.pop()
         # Sort nxt_var.range so that it will be more intuitive to trace. Makes no functional difference.
@@ -160,7 +172,7 @@ class Solver_FD:
     @staticmethod
     def is_a_subsequence_of(As: List, Zs: List):
         """
-        As may be spread out in Zs but must be in the same order as in Zs.
+        As may be spread out in Zs but must be in the same order as in As.
         """
         if not As:
             # If no more As to match, we're done. Succeed.
@@ -187,6 +199,9 @@ class Solver_FD:
         yield from Solver_FD.unify_pairs_FD(zip(As, Zs))
         yield from Solver_FD.is_contiguous_in(As, Zs[1:])
 
+    def narrow(self):
+        yield from self.instantiate_a_var()
+
     def show_vars(self):
         self.line_no += 1
         if self.trace:
@@ -205,11 +220,13 @@ class Solver_FD:
         # If all variables are instanatiated, we have a solution. Yield.
         elif all(v.has_a_value() for v in self.vars): yield
 
-        # Otherwise, show_vars and instantiate a variable.
+        # Otherwise, show_vars and narrow the range of some variable.
+        # self.narrow is a variable. A method is assigned to it.
+        # The default method is instantiate_a_var
         else:
             self.show_vars()
             self.depth += 1
-            for _ in self.narrow(self.vars):
+            for _ in self.narrow():
                 yield from self.solve()
             self.depth -= 1
 
