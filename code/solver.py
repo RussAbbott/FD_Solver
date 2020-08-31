@@ -61,7 +61,7 @@ class Var_FD:
         cls_first_letter = str(cls).split('.')[1][0]
         self.var_name = var_name if var_name else cls_first_letter + str(cls.id)
 
-        self.range = set() if init_range is None else  \
+        self.range = None if init_range is None else  \
                      {init_range} if type(init_range) in [int, str, float] else \
                      set(init_range)
 
@@ -94,7 +94,7 @@ class Var_FD:
     def narrow_range(self, other_var: Var_FD):
         common = self.range & other_var.range
         if len(common) == 0: return
-        single_value = len(common) == 1
+        single_value = len(common) == 1 and not self.was_set
         self.update_range(common, single_value)
         if Solver_FD.propagate and single_value:
             new_value = list(common)[0]
@@ -126,6 +126,7 @@ class Const_FD(Var_FD):
         super().__init__(init_range, var_name)
 
     def narrow_range(self, other_var: Var_FD):
+        """ Should be called with the Var_FD as the subject. """
         if type(other_var) == Var_FD:
             yield from other_var.narrow_range(self)
         else: return
@@ -153,7 +154,6 @@ class Solver_FD:
         nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Solver_FD.smallest_first else \
                   not_set_vars.pop()
         # Sort nxt_var.range so that it will be more intuitive to trace. Makes no functional difference.
-        # for _ in Solver_FD.member_FD(nxt_var, [Const_FD(elt) for elt in sorted(nxt_var.range)]):
         for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.range)]):
             yield
 
@@ -185,7 +185,7 @@ class Solver_FD:
         if len(Zs) < len(As): return
 
         yield from Solver_FD.unify_pairs_FD(zip(As, Zs))
-        yield from Solver_FD.is_contiguous_in(zip(As, Zs[1:]))
+        yield from Solver_FD.is_contiguous_in(As, Zs[1:])
 
     def show_vars(self):
         self.line_no += 1
@@ -195,6 +195,7 @@ class Solver_FD:
             print(line_str)
 
     def solve(self):
+        """ self is the Solver object. It holds the vars. """
         # If any vars have an empty range, the solver has reached a dead end. Fail.
         if any(not v.range for v in self.vars): return
 
@@ -224,12 +225,11 @@ class Solver_FD:
     def unify_pairs_FD(tuples: List[Tuple[Var_FD, Var_FD]]):
       """ Apply unify to pairs of terms. """
       # If no more tuples, we are done.
-      if not tuples:
-        yield
+      if not tuples: yield
       else:
         # Get the first tuple from the tuples list.
         [(Left, Right), *restOfTuples] = tuples
         # If they unify, go on to the rest of the tuples list.
-        for _ in Left.narrow_range(Left, Right):
+        for _ in Left.narrow_range(Right):
           yield from Solver_FD.unify_pairs_FD(restOfTuples)
 
