@@ -210,18 +210,14 @@ class Solver_FD:
 
     def problem_is_solved(self):
         """ The solution condition for transversals. (But not necessarily all problems.) """
-        return all(v.is_instantiated() for v in self.vars)
+        problem_solved = all(v.is_instantiated() for v in self.vars)
+        return problem_solved
 
-    def show_state(self):
+    def show_state(self, solved=False):
         self.line_no += 1
         if self.trace:
-            line_str = self.state_string()
+            line_str = self.state_string(solved)
             print(line_str)
-
-    def state_string(self):
-        line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
-        state_str = f'{line_no_str}{".  " * (self.depth + 1)}{Solver_FD.to_str(self.vars)}'
-        return state_str
 
     def solve(self):
         """ self is the Solver object. It holds the vars. """
@@ -233,7 +229,9 @@ class Solver_FD:
         elif not self.constraints_satisfied(): return
 
         # # Check to see if we have a solution. If so, Yield.
-        elif self.problem_is_solved(): yield
+        elif self.problem_is_solved():
+            self.show_state(solved=True)
+            yield
 
         # Otherwise, show_vars and narrow the range of some variable.
         # self.narrow is a variable. A method is assigned to it.
@@ -244,6 +242,12 @@ class Solver_FD:
             for _ in self.narrow():
                 yield from self.solve()
             self.depth -= 1
+
+    def state_string(self, solved):
+        line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
+        spacer = "* " if solved else ". "
+        state_str = f'{line_no_str}. {spacer * (self.depth)}{Solver_FD.to_str(self.vars)}'
+        return state_str
 
     @staticmethod
     def to_str(xs):

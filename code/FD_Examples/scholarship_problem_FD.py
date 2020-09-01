@@ -93,7 +93,8 @@ class Clues_Solver(Solver_FD):
         yield from self.run_a_clue()
 
     def problem_is_solved(self):
-        return self.clue_index >= len(self.clues)
+        problem_solved = self.clue_index >= len(self.clues)
+        return problem_solved
 
     # def run_all_clues(self):
     #     if self.clue_index >= len(self.clues):
@@ -117,13 +118,13 @@ class Clues_Solver(Solver_FD):
         # Decrement clue_index back to where it was.
         self.clue_index -= 1
 
-    def state_string(self):
-        clue_name = 'at start' if self.clue_index == 0 else self.clues[self.clue_index-1].__name__
+    def state_string(self, solved):
         self.clue = self.clues[self.clue_index-1]
-        # clue_name = self.clue.__name__
+        clue_name = 'at start' if self.clue_index == 0 else self.clue.__name__
+        spacer = "* " if solved else ". "
         state_str = f'{" " if self.line_no < 10 else ""}{self.line_no}.' \
                     f'{" " * (10 - len(clue_name))}({clue_name}) '       \
-                    f'{". " * (self.clue_index + 1)}'                    \
+                    f'{spacer * (self.clue_index + 1)}'                  \
                     f'{Stdnt.stdnts_to_string(self.students)}'
         return state_str
 
@@ -161,6 +162,14 @@ def clue_5(Stdnts):
         [Const_Stdnt(major='Bio'), Const_Stdnt(name='Ada')], Stdnts)
 
 
+def clue_d(Stdnts):
+    """ A derived clue.  From the other clues can exclude some values at the start and end."""
+    yield from Solver_FD.is_a_subsequence_of(
+        [Const_Stdnt(name=Stdnt.names-{'Ada', 'Marie', 'Emmy'}, major=Stdnt.majors-{'CS'}),
+         Const_Stdnt(), Const_Stdnt(),
+         Const_Stdnt(name=Stdnt.names-{'Lynn'}, major=Stdnt.majors-{'Bio', 'CS', 'Phys'})], Stdnts)
+
+
 if __name__ == '__main__':
     students = [Stdnt(name=Stdnt.names, major=Stdnt.majors) for _ in range(4)]
 
@@ -172,10 +181,12 @@ if __name__ == '__main__':
     All_Different(name_vars)
     All_Different(major_vars)
 
-    # Do clue_3 first since it sets 3 things.
-    # clues 1 and 4 set two things each. Their order doesn't matter.
-    # If clue_1 is not included, can get all instantiated but in violation of clue_1.
-    clues = [clues_3_4, clue_5, clue_2, clue_1]
+    # Do the derived clue first since it sets 3 things and has no alternatives.
+    # Do clue_3_4 next since it sets 3 things and after the derived clue has no alternatives.
+    # Then clue_2 since it now has no alternatives.
+    # Clue_5 finishes the job, again with no alternatives.
+    # Can drop clue_1 since it is satisfied after clue 2.
+    clues = [clue_d, clues_3_4, clue_2, clue_5]  #, clue_1]
 
     print('\nStudents:', ', '.join(sorted(Stdnt.names)))
     print('Majors:', ', '.join(sorted(Stdnt.majors)))
@@ -186,9 +197,21 @@ if __name__ == '__main__':
     4. Marie has a $10,000 bigger scholarship than Lynn.
     5. Ada has a bigger scholarship than the student who studies Bio.
     
-    Clues 3 and 4 are run together as a single clue called 'clues_3_4'.
+    Clues 3 and 4 can be run together as a single clue called 'clues_3_4'.
+    
+    Can generate a derived clue, called 'clue_d', that eliminates possible
+    values from the two ends of the list. For example, from clue 5, one can
+    conclude that Ada is not the first person in the list and Bio is not
+    the major of the last.
+    
+    The best ordering for the clues is as follows:
+    1. Do the derived clue first since it sets 3 things and has no alternatives.
+    2. Do clue_3_4 next since it sets 3 things and after the derived clue has no alternatives.
+    3. Then clue_2 since it now has no alternatives.
+    4. Clue_5 finishes the job, again with no alternatives.
+    Can drop clue_1 since it is satisfied after clue 2.
 """)
-    print('The following clues ordering is most effective:\n\t', ', '.join([clue.__name__ for clue in clues]), '\n')
+    # print('The following clues ordering is most effective:\n\t', ', '.join([clue.__name__ for clue in clues]), '\n')
 
     print('*: Var was directly instantiated--and propagated if propagation is on.\n'
           '-: Var was indirectly instantiated but not propagated.\n')
