@@ -25,7 +25,7 @@ def set_up_for_transversals(sets):
     vars = {Var_FD(s.range) for s in sets}
     All_Different(vars)
     trace = Solver_FD.propagate and Solver_FD.smallest_first
-    solver_fd = Solver_FD(vars, constraints={All_Different.all_satisfied}, trace=trace)
+    solver_fd = Solver_FD(vars, trace=trace)
     if solver_fd.trace:
         print(f'{"~" * 90}\n')
         print(Solver_FD.to_str(sets))
@@ -42,6 +42,10 @@ if __name__ == '__main__':
         for Solver_FD.smallest_first in [False, True]:
             solver_fd = set_up_for_transversals(sets)
             sol_str_set = set()
+
+            if solver_fd.trace:
+                print('*: Var was directly instantiated--and propagated if propagation is on.\n'
+                      '-: Var was indirectly instantiated but not propagated.\n')
 
             for _ in solver_fd.solve():
                 sol_string = Solver_FD.to_str(solver_fd.vars)

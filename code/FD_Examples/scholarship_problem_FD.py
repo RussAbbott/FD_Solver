@@ -47,13 +47,13 @@ class Stdnt(Var_FD):
         super().__init__()
 
     def __str__(self):
-        name_str = "-".join(self.name.range) + ('*' if self.name.was_set else '')
-        major_str = "-".join(self.major.range) + ('*' if self.major.was_set else '')
+        name_str = "-".join(self.name.range) + self.name.star_or_dash()
+        major_str = "-".join(self.major.range) + self.major.star_or_dash()
         scholarship_str = '' if self.scholarship is None else f'(${self.scholarship},000)'
         return f'{name_str}/{major_str}{scholarship_str}'
 
     def is_instantiated(self):
-        return self.name.has_a_value() and self.major.has_a_value()
+        return self.name.is_instantiated() and self.major.is_instantiated()
 
     def narrow_range(self, new_value: Stdnt):
         """ Must do both name and major """
@@ -81,40 +81,51 @@ class Const_Stdnt(Stdnt):
 
 class Clues_Solver(Solver_FD):
 
-    def __init__(self, students, clues, clue_index=0):
-        super().__init__(students)
+    def __init__(self, vars, students, clues, clue_index=0,
+                 constraints=frozenset({All_Different.all_satisfied}), trace=False):
+        super().__init__(vars, constraints=constraints, trace=trace)
+        self.clue = None
         self.clues = clues
         self.clue_index = clue_index
-        self.students = self.vars
+        self.students = students
 
-    # def narrow(self):
-    #     yield from self.run_a_clue()
+    def narrow(self):
+        yield from self.run_a_clue()
+
+    def problem_is_solved(self):
+        return self.clue_index >= len(self.clues)
+
+    # def run_all_clues(self):
+    #     if self.clue_index >= len(self.clues):
+    #         # Ran all the clues. Succeed.
+    #         yield
     #
-    def run_all_clues(self):
-        if self.clue_index >= len(self.clues):
-            # Ran all the clues. Succeed.
-            yield
-
-        # The following is commented out because it's possible for all students
-        # to be instantiated but fail a clue that hasn't been applied.
-        # elif all(stdnt.is_instantiated() for stdnt in self.students):
-        #     yield
-        else:
-            yield from self.run_a_clue()
+    #     # The following is commented out because it's possible for all students
+    #     # to be instantiated but fail a clue that hasn't been applied.
+    #     # elif all(stdnt.is_instantiated() for stdnt in self.students):
+    #     #     yield
+    #     else:
+    #         yield from self.run_a_clue()
 
     def run_a_clue(self):
-        clue = self.clues[self.clue_index]
-        for _ in clue(self.students):
+        self.clue = self.clues[self.clue_index]
+        # We know the current clue. Increment clue_index in anticipation of next call.
+        self.clue_index += 1
+        for _ in self.clue(self.students):
             if All_Different.all_satisfied():
-                self.line_no += 1
-                clue_name = clue.__name__
-                print(f'{" " if self.line_no < 10 else ""}{self.line_no}.'
-                      f'{" "*(10-len(clue_name))}({clue_name}) '
-                      f'{". "*(self.clue_index+1)}'
-                      f'{Stdnt.stdnts_to_string(self.students)}')
-                self.clue_index += 1
-                yield from self.run_all_clues()
-                self.clue_index -= 1
+                yield
+        # Decrement clue_index back to where it was.
+        self.clue_index -= 1
+
+    def state_string(self):
+        clue_name = 'at start' if self.clue_index == 0 else self.clues[self.clue_index-1].__name__
+        self.clue = self.clues[self.clue_index-1]
+        # clue_name = self.clue.__name__
+        state_str = f'{" " if self.line_no < 10 else ""}{self.line_no}.' \
+                    f'{" " * (10 - len(clue_name))}({clue_name}) '       \
+                    f'{". " * (self.clue_index + 1)}'                    \
+                    f'{Stdnt.stdnts_to_string(self.students)}'
+        return state_str
 
 
 def clue_1(Stdnts):
@@ -179,11 +190,11 @@ if __name__ == '__main__':
 """)
     print('The following clues ordering is most effective:\n\t', ', '.join([clue.__name__ for clue in clues]), '\n')
 
-    print('An "*" after a name means the name has been explicitly set '
-          'and propagated through the all-different constraints.\n')
+    print('*: Var was directly instantiated--and propagated if propagation is on.\n'
+          '-: Var was indirectly instantiated but not propagated.\n')
 
-    clues_solver = Clues_Solver(students, clues)
-    for _ in clues_solver.run_all_clues():
+    clues_solver = Clues_Solver(name_vars | major_vars, students, clues, trace=True)
+    for _ in clues_solver.solve():
         for (i, std) in enumerate(students):
             std.scholarship = 25 + 5*i
         print(f'\nSolution: {Stdnt.stdnts_to_string(students)}\n')

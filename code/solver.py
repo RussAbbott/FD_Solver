@@ -84,10 +84,13 @@ class Var_FD:
         return hash(self.id)
 
     def __str__(self):
-        var_name_part = self.var_name + ('*' if self.was_set else '') + ':'
+        var_name_part = self.var_name + self.star_or_dash() + ':'
         return f'{var_name_part}{"{"}{", ".join([str(x) for x in sorted(self.range)])}{"}"}'
 
-    def has_a_value(self):
+    def is_at_deadend(self):
+        return not self.range
+
+    def is_instantiated(self):
         return len(self.range) == 1
 
     def member_FD(self, a_list: List[Union[Var_FD, int, str]]):
@@ -115,6 +118,9 @@ class Var_FD:
         if Solver_FD.propagate and single_value:
             All_Different.undo_propagate_value(self)
 
+    def star_or_dash(self):
+        return ('*' if self.was_set else '-' if self.is_instantiated() else '')
+
     def undo_update_range(self):
         (self.range, self.was_set) = self.range_was_set_stack[-1]
         self.range_was_set_stack = self.range_was_set_stack[:-1]
@@ -125,7 +131,7 @@ class Var_FD:
         self.was_set = self.was_set or was_set
 
     def value(self):
-        return list(self.range)[0] if self.has_a_value() else None
+        return list(self.range)[0] if self.is_instantiated() else None
 
 
 class Const_FD(Var_FD):
@@ -151,7 +157,7 @@ class Solver_FD:
     propagate = False
     smallest_first = False
 
-    def __init__(self, vars, constraints=frozenset(), trace=False, narrow=None):
+    def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}), trace=False, narrow=None):
         self.constraints = constraints
         self.depth = 0
         self.line_no = 0
@@ -202,29 +208,38 @@ class Solver_FD:
     def narrow(self):
         yield from self.instantiate_a_var()
 
-    def show_vars(self):
+    def problem_is_solved(self):
+        """ The solution condition for transversals. (But not necessarily all problems.) """
+        return all(v.is_instantiated() for v in self.vars)
+
+    def show_state(self):
         self.line_no += 1
         if self.trace:
-            line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
-            line_str = f'{line_no_str}{".  " * (self.depth + 1)}{Solver_FD.to_str(self.vars)}'
+            line_str = self.state_string()
             print(line_str)
+
+    def state_string(self):
+        line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
+        state_str = f'{line_no_str}{".  " * (self.depth + 1)}{Solver_FD.to_str(self.vars)}'
+        return state_str
 
     def solve(self):
         """ self is the Solver object. It holds the vars. """
         # If any vars have an empty range, the solver has reached a dead end. Fail.
-        if any(not v.range for v in self.vars): return
+        # if any(not v.range for v in self.vars): return
+        if any(v.is_at_deadend() for v in self.vars): return
 
         # If any constraints are not satisfied, Fail.
         elif not self.constraints_satisfied(): return
 
-        # If all variables are instanatiated, we have a solution. Yield.
-        elif all(v.has_a_value() for v in self.vars): yield
+        # # Check to see if we have a solution. If so, Yield.
+        elif self.problem_is_solved(): yield
 
         # Otherwise, show_vars and narrow the range of some variable.
         # self.narrow is a variable. A method is assigned to it.
         # The default method is instantiate_a_var
         else:
-            self.show_vars()
+            self.show_state()
             self.depth += 1
             for _ in self.narrow():
                 yield from self.solve()
