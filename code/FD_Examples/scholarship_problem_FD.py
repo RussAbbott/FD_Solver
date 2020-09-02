@@ -211,7 +211,6 @@ if __name__ == '__main__':
     4. Clue_5 finishes the job, again with no alternatives.
     Can drop clue_1 since it is satisfied after clue 2.
 """)
-    # print('The following clues ordering is most effective:\n\t', ', '.join([clue.__name__ for clue in clues]), '\n')
 
     print('*: Var was directly instantiated--and propagated if propagation is on.\n'
           '-: Var was indirectly instantiated but not propagated.\n')

@@ -28,6 +28,7 @@ def set_up_for_transversals(sets):
     solver_fd = Solver_FD(vars, trace=trace)
     if solver_fd.trace:
         print(f'{"~" * 90}\n')
+        print('Following is the trace of the final search.')
         print(Solver_FD.to_str(sets))
         print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first};\n')
     return solver_fd
@@ -36,7 +37,30 @@ def set_up_for_transversals(sets):
 if __name__ == '__main__':
     sets = gen_sets()
     solution_count = None
-    print('\n', Solver_FD.to_str(sets), '\n')
+    print("""
+Given a collection of sets, a transversal is a selection of one element
+from each set with the property that no elements are repeated.
+           
+This program first generate a collection of sets. Then it searches for
+transversals. Often there are many transversals. Very occassionally, 
+there are no transversals. It all depends on the original sets.
+           
+The search is a standard depth-first search with two heuristics: propagate
+and smallest_first.
+           
+The search is done four time with different settings of propagate and smallest-first.
+           
+When propagate is true, once an element is selected as the representative of one set,
+it is removed from consideration as a posible representative of other sets.
+
+When smallest-first is true, the search selectes an element for an unrepresented set
+by chosing the smallest unrepresented set to find a representative for.
+           
+When both propagate and smallest_first are true, a trace of the search is shown.
+""")
+
+    print('The sets for which to find a traversal are:\n', Solver_FD.to_str(sets), '\n')
+    print('The (alphabetized) traversals are:')
 
     for Solver_FD.propagate in [False, True]:
         for Solver_FD.smallest_first in [False, True]:
@@ -59,8 +83,11 @@ if __name__ == '__main__':
                 for (n, s) in enumerate(sorted(sol_str_set)):
                     print(f'{" " if n < 9 else ""}{n+1}. {s}')
                 print()
+                print("Following are the statistics for the searches that aren't traced."
+                      "\nAll searches should find the same transversals. The difference"
+                      "\nis in the number of steps the search takes.\n")
                 solution_count = len(sol_str_set)
 
             print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first}; '
-                  f'solutions: {solution_count}; lines: {solver_fd.line_no}')
+                  f'solutions: {solution_count}; steps: {solver_fd.line_no}')
     print(f'{"_" * 90}\n{"^" * 90}\n')
