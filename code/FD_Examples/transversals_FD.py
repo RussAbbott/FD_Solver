@@ -85,9 +85,9 @@ When both propagate and smallest_first are true, a trace of the search is shown.
                 print()
                 print("Following are the statistics for the searches that aren't traced."
                       "\nAll searches should find the same transversals. The difference"
-                      "\nis in the number of steps the search takes.\n")
+                      "\nis in the number of steps each search takes.\n")
                 solution_count = len(sol_str_set)
 
-            print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first}; '
+            print(f'(propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first}): '
                   f'solutions: {solution_count}; steps: {solver_fd.line_no}')
     print(f'{"_" * 90}\n{"^" * 90}\n')
