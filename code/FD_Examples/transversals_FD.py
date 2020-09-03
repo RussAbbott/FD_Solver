@@ -17,13 +17,14 @@ def gen_sets(nbr_sets=5):
     return sets
 
 
-def set_up_for_transversals(sets):
+def set_up(sets):
     """ Set up the solver and All_Different for the transversals problem. """
-    Var_FD.id = 0
-    All_Different.sibs_dict = {}
+    Solver_FD.set_up()
+
     # Create a Var_FD for each set. Its initial range is the entire set.
     vars = {Var_FD(s.range) for s in sets}
     All_Different(vars)
+
     trace = Solver_FD.propagate and Solver_FD.smallest_first
     solver_fd = Solver_FD(vars, trace=trace)
     if solver_fd.trace:
@@ -64,7 +65,7 @@ When both propagate and smallest_first are true, a trace of the search is shown.
 
     for Solver_FD.propagate in [False, True]:
         for Solver_FD.smallest_first in [False, True]:
-            solver_fd = set_up_for_transversals(sets)
+            solver_fd = set_up(sets)
             sol_str_set = set()
 
             if solver_fd.trace:

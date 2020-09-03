@@ -62,9 +62,10 @@ class Var_FD:
         self.var_name = var_name if var_name else cls_first_letter + str(cls.id)
 
         # init_range may be None, a single value, or an iterable collection of values
+        # Make self.range a frozenset--and keep it frozen.
         self.range = None if init_range is None else  \
-                     {init_range} if type(init_range) in [int, str, float] else \
-                     set(init_range)
+                     frozenset({init_range}) if type(init_range) in [int, str, float] else \
+                     frozenset(init_range)
 
         # self.range_was_set_stack stores previous values of range and was_set
         # when a new value is assigned. Used for backtracking.
@@ -87,6 +88,12 @@ class Var_FD:
         var_name_part = self.var_name + self.star_or_dash() + ':'
         return f'{var_name_part}{"{"}{", ".join([str(x) for x in sorted(self.range)])}{"}"}'
 
+    def copy(self):
+        cls = type(self)
+        cpy = cls(self.range)
+        cpy.id = self.id
+        return cpy
+
     def is_at_deadend(self):
         return not self.range
 
@@ -108,14 +115,14 @@ class Var_FD:
         """
         common = self.range & other_var.range
         if len(common) == 0: return
-        single_value = len(common) == 1 and not self.was_set
-        self.update_range(common, single_value)
-        if Solver_FD.propagate and single_value:
+        is_single_value = len(common) == 1 and not self.was_set
+        self.update_range(common, is_single_value)
+        if Solver_FD.propagate and is_single_value:
             new_value = list(common)[0]
             All_Different.propagate_value(self, new_value)
         yield
         self.undo_update_range()
-        if Solver_FD.propagate and single_value:
+        if Solver_FD.propagate and is_single_value:
             All_Different.undo_propagate_value(self)
 
     def star_or_dash(self):
@@ -213,6 +220,11 @@ class Solver_FD:
         problem_solved = all(v.is_instantiated() for v in self.vars)
         return problem_solved
 
+    @staticmethod
+    def set_up():
+        Var_FD.id = 0
+        All_Different.sibs_dict = {}
+
     def show_state(self, solved=False):
         self.line_no += 1
         if self.trace:
@@ -269,3 +281,7 @@ class Solver_FD:
         for _ in Left.narrow_range(Right):
           yield from Solver_FD.unify_pairs_FD(restOfTuples)
 
+
+if __name__ == "__main__":
+    solver_fd = Solver_FD(set(), set())
+    solver_fd.solve()

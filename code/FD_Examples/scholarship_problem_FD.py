@@ -171,13 +171,15 @@ def clue_d(Stdnts):
 
 
 if __name__ == '__main__':
+    Solver_FD.set_up()
+
     students = [Stdnt(name=Stdnt.names, major=Stdnt.majors) for _ in range(4)]
 
     name_vars = {std.name for std in students}
     major_vars = {std.major for std in students}
     Solver_FD.propagate = True
 
-    All_Different.sibs_dict = {}
+    # All_Different.sibs_dict = {}
     All_Different(name_vars)
     All_Different(major_vars)
 
