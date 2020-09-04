@@ -9,9 +9,9 @@ class Queen_FD(Var_FD):
 
     vars = None
 
-    def __init__(self, init_range=None, board_size=8):
-        init_range = {c+1 for c in range(board_size)} if init_range is None else init_range
-        super().__init__(init_range=init_range)
+    def __init__(self, init_domain=None, board_size=8):
+        init_domain = {c+1 for c in range(board_size)} if init_domain is None else init_domain
+        super().__init__(init_domain=init_domain)
         self.board_size = board_size
         self.diagonals_stack = []
 
@@ -19,27 +19,27 @@ class Queen_FD(Var_FD):
     def col(self):
         return self.id
 
-    def narrow_range(self, other_var: Var_FD):
+    def narrow_domain(self, other_var: Var_FD):
         """
         Same as for Var_FD except that diagonals are propagated as well.
         """
-        common = self.range & other_var.range
+        common = self.domain & other_var.domain
         if len(common) == 0: return
         is_single_value = len(common) == 1 and not self.was_set
-        self.update_range(common, is_single_value)
+        self.update_domain(common, is_single_value)
         if Solver_FD.propagate and is_single_value:
             new_row = list(common)[0]
             self.propagate_all(new_row)
         yield
-        self.undo_update_range()
+        self.undo_update_domain()
         if Solver_FD.propagate and is_single_value:
             self.undo_propagate_all()
 
     def propagate_all(self, new_row):
         for v in Queen_FD.vars - {self}:
-            v.diagonals_stack += [v.range]
+            v.diagonals_stack += [v.domain]
             diff = abs(self.col - v.col)
-            v.range -= {new_row, new_row + diff, new_row - diff}
+            v.domain -= {new_row, new_row + diff, new_row - diff}
 
     @property
     def row(self):
@@ -47,7 +47,7 @@ class Queen_FD(Var_FD):
 
     def undo_propagate_all(self, ):
         for v in Queen_FD.vars - {self}:
-            v.range = v.diagonals_stack[-1]
+            v.domain = v.diagonals_stack[-1]
             v.diagonals_stack = v.diagonals_stack[:-1]
 
 

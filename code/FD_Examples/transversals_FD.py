@@ -9,8 +9,8 @@ def gen_sets(nbr_sets=5):
     sets_size_low = 2
     sets_size_high = nbr_sets
     vals_size = nbr_sets
-    (vals_range_start_min, vals_range_start_max) = (ord('a'), ord('z') + 1 - vals_size)
-    alpha_low = randint(vals_range_start_min, vals_range_start_max)
+    (vals_domain_start_min, vals_domain_start_max) = (ord('a'), ord('z') + 1 - vals_size)
+    alpha_low = randint(vals_domain_start_min, vals_domain_start_max)
     vals = [chr(alpha_low + k) for k in range(vals_size)]
     sets = [Const_FD(sample(vals, randint(sets_size_low, sets_size_high)))
             for _ in range(nbr_sets)]
@@ -22,7 +22,7 @@ def set_up(sets):
     Solver_FD.set_up()
 
     # Create a Var_FD for each set. Its initial range is the entire set.
-    vars = {Var_FD(s.range) for s in sets}
+    vars = {Var_FD(s.domain) for s in sets}
     All_Different(vars)
 
     trace = Solver_FD.propagate and Solver_FD.smallest_first

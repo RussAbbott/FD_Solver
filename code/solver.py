@@ -25,7 +25,7 @@ class All_Different:
     @staticmethod
     def propagate_value(var_1, value):
         for var_2 in All_Different.sibs_dict[var_1]:
-            var_2.update_range(var_2.range - {value}, was_set=False)
+            var_2.update_domain(var_2.domain - {value}, was_set=False)
 
     @staticmethod
     def satisfied_for_var(v: Var_FD):
@@ -46,7 +46,7 @@ class All_Different:
     @staticmethod
     def undo_propagate_value(var):
         for v in All_Different.sibs_dict[var]:
-            v.undo_update_range()
+            v.undo_update_domain()
 
 
 class Var_FD:
@@ -54,22 +54,22 @@ class Var_FD:
     
     id = 0
 
-    def __init__(self, init_range=None, var_name=None):
+    def __init__(self, init_domain=None, var_name=None):
         cls = type(self)
         cls.id += 1
         self.id = cls.id
         cls_first_letter = str(cls).split('.')[1][0]
         self.var_name = var_name if var_name else cls_first_letter + str(cls.id)
 
-        # init_range may be None, a single value, or an iterable collection of values
-        # Make self.range a frozenset--and keep it frozen.
-        self.range = None if init_range is None else  \
-                     frozenset({init_range}) if type(init_range) in [int, str, float] else \
-                     frozenset(init_range)
+        # init_domain may be None, a single value, or an iterable collection of values
+        # Make self.domain a frozenset--and keep it frozen.
+        self.domain = None if init_domain is None else  \
+                     frozenset({init_domain}) if type(init_domain) in [int, str, float] else \
+                     frozenset(init_domain)
 
-        # self.range_was_set_stack stores previous values of range and was_set
+        # self.domain_was_set_stack stores previous values of range and was_set
         # when a new value is assigned. Used for backtracking.
-        self.range_was_set_stack = []
+        self.domain_was_set_stack = []
 
         # Set to True when this Var_FD is assigned a single value--and hence that value
         # is propagated through the other Var_FD's that must be distict from this one.
@@ -86,59 +86,59 @@ class Var_FD:
 
     def __str__(self):
         var_name_part = self.var_name + self.star_or_dash() + ':'
-        return f'{var_name_part}{"{"}{", ".join([str(x) for x in sorted(self.range)])}{"}"}'
+        return f'{var_name_part}{"{"}{", ".join([str(x) for x in sorted(self.domain)])}{"}"}'
 
     def copy(self):
         cls = type(self)
-        cpy = cls(self.range)
+        cpy = cls(self.domain)
         cpy.id = self.id
         return cpy
 
     def is_at_deadend(self):
-        return not self.range
+        return not self.domain
 
     def is_instantiated(self):
-        return len(self.range) == 1
+        return len(self.domain) == 1
 
     def member_FD(self, a_list: List[Union[Var_FD, int, str]]):
         """ Is self in a_list?  """
         # If a_list is empty, it can't have a member. So fail.
         if not a_list: return
 
-        yield from self.narrow_range(a_list[0])
+        yield from self.narrow_domain(a_list[0])
         yield from self.member_FD(a_list[1:])
 
-    def narrow_range(self, other_var: Var_FD):
+    def narrow_domain(self, other_var: Var_FD):
         """
         Should be called with the Var_FD as the subject. other_var may be a Const_Var.
-        Limit the self.range by other_var.range.
+        Limit the self.domain by other_var.domain.
         """
-        common = self.range & other_var.range
+        common = self.domain & other_var.domain
         if len(common) == 0: return
         is_single_value = len(common) == 1 and not self.was_set
-        self.update_range(common, is_single_value)
+        self.update_domain(common, is_single_value)
         if Solver_FD.propagate and is_single_value:
             new_value = list(common)[0]
             All_Different.propagate_value(self, new_value)
         yield
-        self.undo_update_range()
+        self.undo_update_domain()
         if Solver_FD.propagate and is_single_value:
             All_Different.undo_propagate_value(self)
 
     def star_or_dash(self):
         return ('*' if self.was_set else '-' if self.is_instantiated() else '')
 
-    def undo_update_range(self):
-        (self.range, self.was_set) = self.range_was_set_stack[-1]
-        self.range_was_set_stack = self.range_was_set_stack[:-1]
+    def undo_update_domain(self):
+        (self.domain, self.was_set) = self.domain_was_set_stack[-1]
+        self.domain_was_set_stack = self.domain_was_set_stack[:-1]
 
-    def update_range(self, new_range, was_set):
-        self.range_was_set_stack = self.range_was_set_stack + [(self.range, self.was_set)]
-        self.range = new_range
+    def update_domain(self, new_domain, was_set):
+        self.domain_was_set_stack = self.domain_was_set_stack + [(self.domain, self.was_set)]
+        self.domain = new_domain
         self.was_set = self.was_set or was_set
 
     def value(self):
-        return list(self.range)[0] if self.is_instantiated() else None
+        return list(self.domain)[0] if self.is_instantiated() else None
 
 
 class Const_FD(Var_FD):
@@ -146,16 +146,16 @@ class Const_FD(Var_FD):
 
     id = 0
 
-    def __init__(self, init_range, var_name=None):
-        super().__init__(init_range, var_name)
+    def __init__(self, init_domain, var_name=None):
+        super().__init__(init_domain, var_name)
 
-    def narrow_range(self, other_var: Var_FD):
+    def narrow_domain(self, other_var: Var_FD):
         """
         Should be called with the Var_FD as the subject. other_var may be a Const_Var.
         If the args are reversed, call again with the args in the right order.
         """
         if type(other_var) == Var_FD:
-            yield from other_var.narrow_range(self)
+            yield from other_var.narrow_domain(self)
         else: return
 
 
@@ -164,7 +164,7 @@ class Solver_FD:
     propagate = False
     smallest_first = False
 
-    def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}), trace=False, narrow=None):
+    def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}), trace=False):
         self.constraints = constraints
         self.depth = 0
         self.line_no = 0
@@ -176,10 +176,10 @@ class Solver_FD:
 
     def instantiate_a_var(self):
         not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_set}
-        nxt_var = min(not_set_vars, key=lambda v: len(v.range)) if Solver_FD.smallest_first else \
+        nxt_var = min(not_set_vars, key=lambda v: len(v.domain)) if Solver_FD.smallest_first else \
                   not_set_vars.pop()
-        # Sort nxt_var.range so that it will be more intuitive to trace. Makes no functional difference.
-        for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.range)]):
+        # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
+        for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
             yield
 
     @staticmethod
@@ -196,7 +196,7 @@ class Solver_FD:
             return
 
         else:
-            for _ in As[0].narrow_range(Zs[0]):
+            for _ in As[0].narrow_domain(Zs[0]):
                 yield from Solver_FD.is_a_subsequence_of(As[1:], Zs[1:])
 
             yield from Solver_FD.is_a_subsequence_of(As, Zs[1:])
@@ -234,7 +234,7 @@ class Solver_FD:
     def solve(self):
         """ self is the Solver object. It holds the vars. """
         # If any vars have an empty range, the solver has reached a dead end. Fail.
-        # if any(not v.range for v in self.vars): return
+        # if any(not v.domain for v in self.vars): return
         if any(v.is_at_deadend() for v in self.vars): return
 
         # If any constraints are not satisfied, Fail.
@@ -278,7 +278,7 @@ class Solver_FD:
         # Get the first tuple from the tuples list.
         [(Left, Right), *restOfTuples] = tuples
         # If they unify, go on to the rest of the tuples list.
-        for _ in Left.narrow_range(Right):
+        for _ in Left.narrow_domain(Right):
           yield from Solver_FD.unify_pairs_FD(restOfTuples)
 
 

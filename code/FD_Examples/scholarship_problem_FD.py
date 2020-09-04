@@ -47,18 +47,18 @@ class Stdnt(Var_FD):
         super().__init__()
 
     def __str__(self):
-        name_str = "-".join(self.name.range) + self.name.star_or_dash()
-        major_str = "-".join(self.major.range) + self.major.star_or_dash()
+        name_str = "-".join(self.name.domain) + self.name.star_or_dash()
+        major_str = "-".join(self.major.domain) + self.major.star_or_dash()
         scholarship_str = '' if self.scholarship is None else f'(${self.scholarship},000)'
         return f'{name_str}/{major_str}{scholarship_str}'
 
     def is_instantiated(self):
         return self.name.is_instantiated() and self.major.is_instantiated()
 
-    def narrow_range(self, new_value: Stdnt):
+    def narrow_domain(self, new_value: Stdnt):
         """ Must do both name and major """
-        for _ in self.name.narrow_range(new_value.name):
-            yield from self.major.narrow_range(new_value.major)
+        for _ in self.name.narrow_domain(new_value.name):
+            yield from self.major.narrow_domain(new_value.major)
 
     @staticmethod
     def stdnts_to_string(students):
@@ -72,10 +72,10 @@ class Const_Stdnt(Stdnt):
         super().__init__(name, major)
         self.var_name = 'CS' + self.var_name[1:]
 
-    def narrow_range(self, new_value: Stdnt):
+    def narrow_domain(self, new_value: Stdnt):
         """ If we are a Const_Stdnt, and new_value is a Stdnt, turn the args around. """
         if type(new_value) == Stdnt:
-            yield from new_value.narrow_range(self)
+            yield from new_value.narrow_domain(self)
         else: return
 
 
@@ -95,18 +95,6 @@ class Clues_Solver(Solver_FD):
     def problem_is_solved(self):
         problem_solved = self.clue_index >= len(self.clues)
         return problem_solved
-
-    # def run_all_clues(self):
-    #     if self.clue_index >= len(self.clues):
-    #         # Ran all the clues. Succeed.
-    #         yield
-    #
-    #     # The following is commented out because it's possible for all students
-    #     # to be instantiated but fail a clue that hasn't been applied.
-    #     # elif all(stdnt.is_instantiated() for stdnt in self.students):
-    #     #     yield
-    #     else:
-    #         yield from self.run_a_clue()
 
     def run_a_clue(self):
         self.clue = self.clues[self.clue_index]
