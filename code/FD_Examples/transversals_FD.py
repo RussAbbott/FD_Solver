@@ -9,8 +9,8 @@ def gen_sets(nbr_sets=5):
     sets_size_low = 2
     sets_size_high = nbr_sets
     vals_size = nbr_sets
-    (vals_domain_start_min, vals_domain_start_max) = (ord('a'), ord('z') + 1 - vals_size)
-    alpha_low = randint(vals_domain_start_min, vals_domain_start_max)
+    (vals_range_start_min, vals_range_start_max) = (ord('a'), ord('z') + 1 - vals_size)
+    alpha_low = randint(vals_range_start_min, vals_range_start_max)
     vals = [chr(alpha_low + k) for k in range(vals_size)]
     sets = [Const_FD(sample(vals, randint(sets_size_low, sets_size_high)))
             for _ in range(nbr_sets)]
