@@ -17,7 +17,7 @@ def gen_sets(nbr_sets=5):
     return sets
 
 
-def set_up(sets):
+def set_up(sets, propagate, smallest_first):
     """ Set up the solver and All_Different for the transversals problem. """
     Solver_FD.set_up()
 
@@ -25,13 +25,13 @@ def set_up(sets):
     vars = {Var_FD(s.domain) for s in sets}
     All_Different(vars)
 
-    trace = Solver_FD.propagate and Solver_FD.smallest_first
-    solver_fd = Solver_FD(vars, trace=trace)
+    trace = propagate and smallest_first
+    solver_fd = Solver_FD(vars, propagate=propagate, smallest_first=smallest_first, trace=trace)
     if solver_fd.trace:
         print(f'{"~" * 90}\n')
         print('Following is the trace of the final search.')
         print(Solver_FD.to_str(sets))
-        print(f'propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first};\n')
+        print(f'propagate: {propagate}; smallest_first: {smallest_first};\n')
     return solver_fd
 
 
@@ -63,15 +63,15 @@ When both propagate and smallest_first are true, a trace of the search is shown.
     print('The sets for which to find a traversal are:\n', Solver_FD.to_str(sets), '\n')
     print('The (alphabetized) traversals are:')
 
-    for Solver_FD.propagate in [False, True]:
-        for Solver_FD.smallest_first in [False, True]:
-            solver_fd = set_up(sets)
+    for propagate in [False, True]:
+        for smallest_first in [False, True]:
+            solver_fd = set_up(sets, propagate=propagate, smallest_first=smallest_first)
             sol_str_set = set()
 
             if solver_fd.trace:
                 print('*: Var was directly instantiated--and propagated if propagation is on.\n'
                       '-: Var was indirectly instantiated but not propagated.\n')
-
+            assert solver_fd.propagate == propagate and solver_fd.smallest_first == smallest_first
             for _ in solver_fd.solve():
                 sol_string = Solver_FD.to_str(solver_fd.vars)
                 sol_str_set |= {sol_string}
@@ -89,6 +89,6 @@ When both propagate and smallest_first are true, a trace of the search is shown.
                       "\nis in the number of steps each search takes.\n")
                 solution_count = len(sol_str_set)
 
-            print(f'(propagate: {Solver_FD.propagate}; smallest_first: {Solver_FD.smallest_first}): '
+            print(f'(propagate: {propagate}; smallest_first: {smallest_first}): '
                   f'solutions: {solution_count}; steps: {solver_fd.line_no}')
     print(f'{"_" * 90}\n{"^" * 90}\n')

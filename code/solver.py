@@ -25,13 +25,13 @@ class All_Different:
     @staticmethod
     def propagate_value(var_1, value):
         for var_2 in All_Different.sibs_dict[var_1]:
-            var_2.update_domain(var_2.domain - {value}, was_set=False)
+            var_2.update_domain(var_2.domain - {value}, was_propagated=False)
 
     @staticmethod
     def satisfied_for_var(v: Var_FD):
         # Finally got to use the walrus operator.
-        satisfied = (v_value := v.value()) is None or \
-                    all(v_value != w.value() for w in All_Different.sibs_dict[v])
+        satisfied = (v_value := v.value) is None or \
+                    all(v_value != w.value for w in All_Different.sibs_dict[v])
         return satisfied
 
     @staticmethod
@@ -53,6 +53,7 @@ class Var_FD:
     """ A Finite Domain variable """
     
     id = 0
+    solver = None
 
     def __init__(self, init_domain=None, var_name=None):
         cls = type(self)
@@ -67,13 +68,13 @@ class Var_FD:
                      frozenset({init_domain}) if type(init_domain) in [int, str, float] else \
                      frozenset(init_domain)
 
-        # self.domain_was_set_stack stores previous values of range and was_set
+        # self.domain_was_propagated_stack stores previous values of range and was_propagated
         # when a new value is assigned. Used for backtracking.
-        self.domain_was_set_stack = []
+        self.domain_was_propagated_stack = []
 
         # Set to True when this Var_FD is assigned a single value--and hence that value
         # is propagated through the other Var_FD's that must be distict from this one.
-        self.was_set = False
+        self.was_propagated = False
 
         # So far not used. Haven't needed unification yet.
         self.unification_chain_next = None
@@ -115,28 +116,33 @@ class Var_FD:
         """
         common = self.domain & other_var.domain
         if len(common) == 0: return
-        is_single_value = len(common) == 1 and not self.was_set
-        self.update_domain(common, is_single_value)
-        if Solver_FD.propagate and is_single_value:
+        should_propagate = len(common) == 1 and not self.was_propagated
+        self.update_domain(common, should_propagate)
+        if Var_FD.solver.propagate and should_propagate:
             new_value = list(common)[0]
             All_Different.propagate_value(self, new_value)
         yield
         self.undo_update_domain()
-        if Solver_FD.propagate and is_single_value:
+        if Var_FD.solver.propagate and should_propagate:
             All_Different.undo_propagate_value(self)
 
+    def set_init_domain(self, new_domain, was_propagated=False):
+        self.update_domain(new_domain, was_propagated=was_propagated, track_in_stack=False)
+
     def star_or_dash(self):
-        return ('*' if self.was_set else '-' if self.is_instantiated() else '')
+        return ('*' if self.was_propagated else '-' if self.is_instantiated() else '')
 
     def undo_update_domain(self):
-        (self.domain, self.was_set) = self.domain_was_set_stack[-1]
-        self.domain_was_set_stack = self.domain_was_set_stack[:-1]
+        (self.domain, self.was_propagated) = self.domain_was_propagated_stack[-1]
+        self.domain_was_propagated_stack = self.domain_was_propagated_stack[:-1]
 
-    def update_domain(self, new_domain, was_set):
-        self.domain_was_set_stack = self.domain_was_set_stack + [(self.domain, self.was_set)]
+    def update_domain(self, new_domain, was_propagated=False, track_in_stack=True):
+        if track_in_stack:
+            self.domain_was_propagated_stack = self.domain_was_propagated_stack + [(self.domain, self.was_propagated)]
         self.domain = new_domain
-        self.was_set = self.was_set or was_set
+        self.was_propagated = self.was_propagated or was_propagated
 
+    @property
     def value(self):
         return list(self.domain)[0] if self.is_instantiated() else None
 
@@ -161,27 +167,29 @@ class Const_FD(Var_FD):
 
 class Solver_FD:
 
-    propagate = False
-    smallest_first = False
-
-    def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}), trace=False):
+    def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}),
+                 propagate=True, smallest_first=True, trace=False):
         self.constraints = constraints
         self.depth = 0
         self.line_no = 0
+        self.propagate = propagate
+        self.smallest_first = smallest_first
         self.trace = trace
         self.vars = vars
+
+        Var_FD.solver = self
 
     def constraints_satisfied(self):
         return all(constraint() for constraint in self.constraints)
 
-    def instantiate_a_var(self):
-        not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_set}
-        nxt_var = min(not_set_vars, key=lambda v: len(v.domain)) if Solver_FD.smallest_first else \
-                  not_set_vars.pop()
-        # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
-        for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
-            yield
-
+    # def instantiate_a_var(self):
+    #     not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_propagated}
+    #     nxt_var = min(not_set_vars, key=lambda v: len(v.domain)) if Solver_FD.smallest_first else \
+    #               not_set_vars.pop()
+    #     # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
+    #     for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
+    #         yield
+    #
     @staticmethod
     def is_a_subsequence_of(As: List, Zs: List):
         """
@@ -213,12 +221,22 @@ class Solver_FD:
         yield from Solver_FD.is_contiguous_in(As, Zs[1:])
 
     def narrow(self):
-        yield from self.instantiate_a_var()
+        # The default is to instantiate a var
+        nxt_var = self.select_var_to_instantiate()
+        # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
+        for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
+            yield
 
     def problem_is_solved(self):
         """ The solution condition for transversals. (But not necessarily all problems.) """
         problem_solved = all(v.is_instantiated() for v in self.vars)
         return problem_solved
+
+    def select_var_to_instantiate(self):
+        not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_propagated}
+        nxt_var = min(not_set_vars, key=lambda v: len(v.domain)) if self.smallest_first else \
+                  not_set_vars.pop()
+        return nxt_var
 
     @staticmethod
     def set_up():
@@ -246,8 +264,7 @@ class Solver_FD:
             yield
 
         # Otherwise, show_vars and narrow the range of some variable.
-        # self.narrow is a variable. A method is assigned to it.
-        # The default method is instantiate_a_var
+        # The default method is to instantiate a var.
         else:
             self.show_state()
             self.depth += 1

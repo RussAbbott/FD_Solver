@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from math import prod
 from typing import Iterable, List
 
 from solver import All_Different, Solver_FD, Var_FD
@@ -93,6 +96,54 @@ from solver import All_Different, Solver_FD, Var_FD
 #   yield from solve_aux(len(Carries)-1, list(range(10)))
 #
 #
+class Columns:
+
+    def __init__(self, cols: List[List[Var_FD]], carry_out: Var_FD):
+        self.cols = cols
+        self.carry_out_term = carry_out
+
+    def carry_in_value(self, col_indx):
+        return self.cols[col_indx][0].value
+
+    def carry_out_value(self, col_indx):
+        return 0 if col_indx == 0 else self.cols[col_indx - 1][0].value
+
+    def check_a_col(self, col_indx):
+        # noinspection PyUnboundLocalVariable
+        return (sum := self.col_sum_value(col_indx)) is None \
+               or (target := self.col_target_value(col_indx)) is None \
+               or sum == target
+
+
+    def col_sum_value(self, col_indx):
+        col_sum_values = [c.value for c in self.cols[col_indx][1:-1]]
+        return None if None in col_sum_values else sum(col_sum_values)\
+
+    def col_target_value(self, col_indx):
+        col_target_values = [self.cols[col_indx-1][0], self.cols[col_indx][3]]
+        return None if None in col_target_values else sum(col_target_values)
+
+    def middle_terms(self, col_indx):
+        return [c.value for c in self.cols[col_indx][1:-1]]
+
+    def smallest_column_term_var(self):
+        """
+        Find the Var in the column with the smallest number of
+        available possibilities among its term vars. Then select
+        the var with the smallest domain.
+        """
+        def term_domains_sizes(col):
+            # col[1:-1]gets the middle elements
+            return prod( [len(x.domain) for x in col[1:-1]] )
+
+        col_uninstans = [(self.cols[indx], term_domains_sizes(self.cols[indx]), indx)
+                         for indx in range(len(self.cols)) if term_domains_sizes(self.cols[indx]) > 1]
+        (min_col, _, _) = min(col_uninstans, key=lambda cu: (cu[1], cu[2]))
+        smallest_var = min(min_col[1:-1], key=lambda x: len(x.domain) if len(x.domain) > 1 else float('inf'))
+        return smallest_var
+
+
+
 
 class Crypto_FD(Solver_FD):
 
@@ -104,33 +155,21 @@ class Crypto_FD(Solver_FD):
         self.term_1_vars = term_1_vars
         self.term_2_vars = term_2_vars
         self.sum_vars = sum_vars
-        self.columns = columns
-        super().__init__(problem_vars)
+        self.columns = Columns(columns, carries[0])
+        super().__init__(problem_vars | set(carries))
 
-    def add_col(self, col_vars_terms, col_var_sum):
-        # Must be expanded
-        print(self, col_vars_terms, col_var_sum)
-        yield
-
-    # def smallest_column(self):
+    # def add_col(self, col_vars_terms, col_var_sum):
+    #     # Must be expanded
+    #     print(self, col_vars_terms, col_var_sum)
+    #     yield
 
     def narrow(self):
         yield from self.run_a_col()
 
     def problem_is_solved(self):
-        problem_solved = self.col_index <= -len(sum_vars)
-        return problem_solved
-
-    def run_a_col(self):
-        self.col_index -= 1
-        col_vars_terms = [self.carries[self.col_index], self.term_1_vars[self.col_index], self.term_2_vars[self.col_index]]
-        col_var_sum = [self.carries[self.col_index-1], self.sum_vars[self.col_index]]
-        for _ in self.add_col(col_vars_terms, col_var_sum):
-            if All_Different.all_satisfied():
-                yield
+        return self.col_index < 0
 
         # Increment col_index back to where it was.
-        self.col_index += 1
 
 
 def var_to_str(var):
@@ -140,6 +179,47 @@ def var_to_str(var):
 def letters_to_vars(st: Iterable, d: dict) -> List:
     """ Look up the elements in st in the dictionary d. """
     return [d[s] for s in st]
+
+
+def run_problem():
+    # See http://bach.istc.kobe-u.ac.jp/llp/crypt.html (and links) for these and many(!) more.
+    for (term_1, term_2, sum) in [
+        ('SEND', 'MORE', 'MONEY'),
+        # ('BASE', 'BALL', 'GAMES'),
+        # ('SATURN', 'URANUS', 'PLANETS'),
+        # ('POTATO', 'TOMATO', 'PUMPKIN')
+        ]:
+        crypto_solver = set_up(term_1, term_2, sum)
+
+        # print(f'\nCarries: {", ".join(map(Solver_FD.to_str, crypto_solver.carries))}\n')
+        print(f'\nCarries: {Solver_FD.to_str(crypto_solver.carries)}\n')
+        print(f'{term_to_string(crypto_solver.carries)} -> {term_to_number(crypto_solver.carries)}')
+        print(f'{term_to_string(crypto_solver.term_1_vars[0:])} -> {term_to_number(crypto_solver.term_1_vars)}')
+        print(f'{term_to_string(crypto_solver.term_2_vars[0:])} -> {term_to_number(crypto_solver.term_2_vars)}')
+        print(f'{term_to_string(crypto_solver.sum_vars)} -> {term_to_number(crypto_solver.sum_vars)}\n')
+
+        print(f'{" ".join(term_to_string(col) for col in crypto_solver.columns.cols)}')
+        print(f'{" ".join(term_to_number(col) for col in crypto_solver.columns.cols)}')
+
+        print(Solver_FD.to_str(crypto_solver.vars).replace('}, ', '}\n'))
+
+        # This tests smallest_column_term_var
+        crypto_solver.term_1_vars[2].update_domain({3, 4})
+        crypto_solver.term_1_vars[4].update_domain({1, 2, 7})
+        crypto_solver.term_2_vars[2].update_domain({5})
+        print()
+        print(crypto_solver.term_1_vars[2], crypto_solver.term_1_vars[4], crypto_solver.term_2_vars[2])
+        print(crypto_solver.columns.smallest_column_term_var())  # => E:{3, 4} D:{1, 2, 7} O-:{5}
+                                                                 #    E:{3, 4}
+        crypto_solver.term_1_vars[2].undo_update_domain()
+        crypto_solver.term_1_vars[4].undo_update_domain()
+        crypto_solver.term_2_vars[2].undo_update_domain()
+        print()
+        print(crypto_solver.term_1_vars[2], crypto_solver.term_1_vars[4], crypto_solver.term_2_vars[2])
+        # noinspection LongLine
+        print(crypto_solver.columns.smallest_column_term_var())  # => E:{0, 2, 3, 4, 5, 6, 7, 8, 9} D:{0, 2, 3, 4, 5, 6, 7, 8, 9} O:{0, 2, 3, 4, 5, 6, 7, 8, 9}
+                                                                 # S:{0, 2, 3, 4, 5, 6, 7, 8, 9}
+
 
 
 def set_up(term_1: str, term_2: str, sum: str):
@@ -166,26 +246,17 @@ def set_up(term_1: str, term_2: str, sum: str):
 
     # # Leading_Digits are the variables that should not be assigned 0.
     # Leading_Digits = letters_to_vars({term_1[0], term_2[0], sum[0]}, vars_dict)
-    carries = [Var_FD(frozenset({0, 1}), var_name=f'C{i}') for i in range(sum_length+1)]
-    columns = list(zip(carries[1:], term_1_vars, term_2_vars, sum_vars))
+    carries = [Var_FD(frozenset({0, 1}), var_name=f'C{i}') for i in range(sum_length)]
+    columns = list(zip(carries, term_1_vars, term_2_vars, sum_vars))
 
-    carries[-1].domain = frozenset({0})
-    carries[0].domain = frozenset({0})
-    term_1_vars[2].domain -= {0}
-    term_2_vars[2].domain -= {0}
-    sum_vars[1].domain -= {0}
-    if len(term_1) == len(term_2) == len(sum) - 1:
-        sum_vars[0].domain = {1}
-        carries[1].domain = frozenset({1})
-
-    carries[-1].domain = frozenset({0})
-    carries[0].domain = frozenset({0})
-    term_1_vars[1].domain -= {0}
-    term_2_vars[1].domain -= {0}
+    # Mark carries as was_propagated since they are never propagated.
+    carries[-1].set_init_domain(frozenset({0}), was_propagated=True)
     if len(term_1) == len(term_2) == len(sum)-1:
-        sum_vars[0].domain = {1}
-        sum_vars[1].domain = {0, 1}
-        carries[1].domain = {1}
+        sum_vars[0].set_init_domain(frozenset({1}), was_propagated=True)
+        for v in problem_vars:
+            if v is not sum_vars[0]:
+                v.set_init_domain(v.domain-{1}, was_propagated=False)
+        carries[0].set_init_domain(frozenset({1}), was_propagated=True)
 
     crypto_solver = Crypto_FD(carries, term_1_vars, term_2_vars, sum_vars, columns, problem_vars)
     return crypto_solver
@@ -193,7 +264,7 @@ def set_up(term_1: str, term_2: str, sum: str):
 
 def term_to_number(vs) -> str:
     """  Convert a list of Vars to a string of digits. """
-    digits = "".join((str(v.value()) if v.is_instantiated() else '_') for v in vs)
+    digits = "".join((str(v.value) if v.is_instantiated() else '_') for v in vs)
     return digits
 
 
@@ -228,20 +299,24 @@ def term_to_string(vs) -> str:
 
 if __name__ == '__main__':
 
-    # See http://bach.istc.kobe-u.ac.jp/llp/crypt.html (and links) for these and many(!) more.
-    for (term_1, term_2, sum) in [
-        ('SEND', 'MORE', 'MONEY'),
-        # ('BASE', 'BALL', 'GAMES'),
-        # ('SATURN', 'URANUS', 'PLANETS'),
-        # ('POTATO', 'TOMATO', 'PUMPKIN')
-        ]:
-        crypto_solver = set_up(term_1, term_2, sum)
+    run_problem()
 
-        print(f'\nCarries: {", ".join(map(Solver_FD.to_str, crypto_solver.carries))}\n')
-        print(f'{term_to_string(crypto_solver.carries)} -> {term_to_number(crypto_solver.carries)}')
-        print(f' {term_to_string(crypto_solver.term_1_vars[0:])} ->  {term_to_number(crypto_solver.term_1_vars)}')
-        print(f' {term_to_string(crypto_solver.term_2_vars[0:])} ->  {term_to_number(crypto_solver.term_2_vars)}')
-        print(f' {term_to_string(crypto_solver.sum_vars)} ->  {term_to_number(crypto_solver.sum_vars)}\n')
-
-        print(f'{" ".join(term_to_string(col) for col in crypto_solver.columns)}')
-        print(f'{" ".join(term_to_number(col) for col in crypto_solver.columns)}')
+    # # See http://bach.istc.kobe-u.ac.jp/llp/crypt.html (and links) for these and many(!) more.
+    # for (term_1, term_2, sum) in [
+    #     ('SEND', 'MORE', 'MONEY'),
+    #     # ('BASE', 'BALL', 'GAMES'),
+    #     # ('SATURN', 'URANUS', 'PLANETS'),
+    #     # ('POTATO', 'TOMATO', 'PUMPKIN')
+    #     ]:
+    #     crypto_solver = set_up(term_1, term_2, sum)
+    #
+    #     print(f'\nCarries: {", ".join(map(Solver_FD.to_str, crypto_solver.carries))}\n')
+    #     print(f'{term_to_string(crypto_solver.carries)} -> {term_to_number(crypto_solver.carries)}')
+    #     print(f' {term_to_string(crypto_solver.term_1_vars[0:])} ->  {term_to_number(crypto_solver.term_1_vars)}')
+    #     print(f' {term_to_string(crypto_solver.term_2_vars[0:])} ->  {term_to_number(crypto_solver.term_2_vars)}')
+    #     print(f' {term_to_string(crypto_solver.sum_vars)} ->  {term_to_number(crypto_solver.sum_vars)}\n')
+    #
+    #     print(f'{" ".join(term_to_string(col) for col in crypto_solver.cols)}')
+    #     print(f'{" ".join(term_to_number(col) for col in crypto_solver.cols)}')
+    #
+    #     print(crypto_solver.smallest_column_var())

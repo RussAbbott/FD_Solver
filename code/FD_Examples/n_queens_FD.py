@@ -25,14 +25,14 @@ class Queen_FD(Var_FD):
         """
         common = self.domain & other_var.domain
         if len(common) == 0: return
-        is_single_value = len(common) == 1 and not self.was_set
+        is_single_value = len(common) == 1 and not self.was_propagated
         self.update_domain(common, is_single_value)
-        if Solver_FD.propagate and is_single_value:
+        if Var_FD.solver.propagate and is_single_value:
             new_row = list(common)[0]
             self.propagate_all(new_row)
         yield
         self.undo_update_domain()
-        if Solver_FD.propagate and is_single_value:
+        if Var_FD.solver.propagate and is_single_value:
             self.undo_propagate_all()
 
     def propagate_all(self, new_row):
@@ -43,7 +43,7 @@ class Queen_FD(Var_FD):
 
     @property
     def row(self):
-        return self.value()
+        return self.value
 
     def undo_propagate_all(self, ):
         for v in Queen_FD.vars - {self}:
@@ -55,7 +55,7 @@ class Queens_Solver_FD(Solver_FD):
 
     def problem_is_solved(self):
         """ The solution condition for transversals. (But not necessarily all problems.) """
-        problem_solved = all(v.was_set for v in self.vars)
+        problem_solved = all(v.was_propagated for v in self.vars)
         return problem_solved
 
 
@@ -91,8 +91,8 @@ def space_offset(n, board_size):
 def set_up(board_size, trace=False):
     """ Set up the solver and All_Different for the transversals problem. """
     Solver_FD.set_up()
-    Solver_FD.propagate = True
-    Solver_FD.smallest_first = True
+    # Solver_FD.propagate = True
+    # Solver_FD.smallest_first = True
 
     # Create a Queen_FD for each column. Each has an initial range of {c+1 for c in range(board_size)}.
     vars = {Queen_FD(board_size=board_size) for _ in range(board_size)}
@@ -101,14 +101,16 @@ def set_up(board_size, trace=False):
     # Keep a record of the vars in Queen_FD so that we can propagate diagonals.
     Queen_FD.vars = vars
 
-    solver_fd = Queens_Solver_FD(vars, set())
+    # Don't need constraints since every time a var is instantiated it is
+    # propagated, which ensures that the constraints are always satisfied.
+    solver_fd = Queens_Solver_FD(vars, constraints=set())
     solver_fd.trace = trace
     return solver_fd
 
 
 if __name__ == "__main__":
     board_size = 6
-    solver_fd = set_up(board_size=board_size, trace=board_size == 6)
+    solver_fd = set_up(board_size=board_size, trace=board_size==6)
     sols = 0
     board_string = None
     current_sol = None
