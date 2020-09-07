@@ -120,6 +120,7 @@ class Var_FD:
         self.update_domain(common, should_propagate)
         if Var_FD.solver.propagate and should_propagate:
             new_value = list(common)[0]
+            # print('narrow_domain', self, other_var)
             All_Different.propagate_value(self, new_value)
         yield
         self.undo_update_domain()
@@ -160,7 +161,8 @@ class Const_FD(Var_FD):
         Should be called with the Var_FD as the subject. other_var may be a Const_Var.
         If the args are reversed, call again with the args in the right order.
         """
-        if type(other_var) == Var_FD:
+        if type(other_var) == Const_FD and self.value == other_var.value: yield
+        elif isinstance(other_var, Var_FD):
             yield from other_var.narrow_domain(self)
         else: return
 
@@ -168,13 +170,14 @@ class Const_FD(Var_FD):
 class Solver_FD:
 
     def __init__(self, vars, constraints=frozenset({All_Different.all_satisfied}),
-                 propagate=True, smallest_first=True, trace=False):
+                 propagate=True, smallest_first=True, trace=False, trace_all=False):
         self.constraints = constraints
         self.depth = 0
         self.line_no = 0
         self.propagate = propagate
         self.smallest_first = smallest_first
         self.trace = trace
+        self.trace_all = trace_all
         self.vars = vars
 
         Var_FD.solver = self
@@ -182,14 +185,6 @@ class Solver_FD:
     def constraints_satisfied(self):
         return all(constraint() for constraint in self.constraints)
 
-    # def instantiate_a_var(self):
-    #     not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_propagated}
-    #     nxt_var = min(not_set_vars, key=lambda v: len(v.domain)) if Solver_FD.smallest_first else \
-    #               not_set_vars.pop()
-    #     # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
-    #     for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
-    #         yield
-    #
     @staticmethod
     def is_a_subsequence_of(As: List, Zs: List):
         """
@@ -224,13 +219,26 @@ class Solver_FD:
         # The default is to instantiate a var
         nxt_var = self.select_var_to_instantiate()
         # Sort nxt_var.domain so that it will be more intuitive to trace. Makes no functional difference.
+        if self.trace_all: print(f'{nxt_var} ->')
         for _ in nxt_var.member_FD([Const_FD(elt) for elt in sorted(nxt_var.domain)]):
-            yield
+            # print('nxt_var', nxt_var)
+            # if nxt_var.value == 8:
+            #     print('nxt_var', nxt_var)
+            yield from self.propagate_consequences()
+        #     if self.trace_all: print( '-> ', nxt_var)
+        #     for _ in self.propagate_consequences():
+        #         if self.trace_all: self.show_state(label=f'After propagate consequences of {nxt_var}', solved=False)
+        #         yield
+        #         if self.trace_all: print(f'Failed: {nxt_var}\n')
+        # if self.trace_all: print(nxt_var, ':::')
 
     def problem_is_solved(self):
         """ The solution condition for transversals. (But not necessarily all problems.) """
         problem_solved = all(v.is_instantiated() for v in self.vars)
         return problem_solved
+
+    def propagate_consequences(self):
+        yield
 
     def select_var_to_instantiate(self):
         not_set_vars: Set[Var_FD] = {v for v in self.vars if not v.was_propagated}
@@ -243,11 +251,12 @@ class Solver_FD:
         Var_FD.id = 0
         All_Different.sibs_dict = {}
 
-    def show_state(self, solved=False):
+    def show_state(self, label='', solved=False):
         self.line_no += 1
         if self.trace:
             line_str = self.state_string(solved)
-            print(line_str)
+            lbl = f'({label})\n' if label and self.trace_all else ''
+            print(f'{lbl}{line_str}')
 
     def solve(self):
         """ self is the Solver object. It holds the vars. """
@@ -260,19 +269,19 @@ class Solver_FD:
 
         # # Check to see if we have a solution. If so, Yield.
         elif self.problem_is_solved():
-            self.show_state(solved=True)
+            self.show_state(label='Solved', solved=True)
             yield
 
         # Otherwise, show_vars and narrow the range of some variable.
         # The default method is to instantiate a var.
         else:
-            self.show_state()
             self.depth += 1
+            self.show_state(label=f'solve {self.depth}')
             for _ in self.narrow():
                 yield from self.solve()
             self.depth -= 1
 
-    def state_string(self, solved):
+    def state_string(self, solved=False):
         line_no_str = f'{" " if self.line_no < 10 else ""}{str(self.line_no)}'
         spacer = "* " if solved else ". "
         state_str = f'{line_no_str}. {spacer * (self.depth)}{Solver_FD.to_str(self.vars)}'
@@ -293,9 +302,9 @@ class Solver_FD:
       if not tuples: yield
       else:
         # Get the first tuple from the tuples list.
-        [(Left, Right), *restOfTuples] = tuples
+        [(left, right), *restOfTuples] = tuples
         # If they unify, go on to the rest of the tuples list.
-        for _ in Left.narrow_domain(Right):
+        for _ in left.narrow_domain(right):
           yield from Solver_FD.unify_pairs_FD(restOfTuples)
 
 

@@ -78,7 +78,7 @@ When both propagate and smallest_first are true, a trace of the search is shown.
                 if solver_fd.trace:
                     solutions_nbr = len(sol_str_set)
                     sol_nbr_str = f'{" " if solutions_nbr < 10 else ""}{solutions_nbr}'
-                    print(f"\t\t=>\t{sol_nbr_str}. {sol_string}\n")
+                    # print(f"\t\t=>\t{sol_nbr_str}. {sol_string}\n")
 
             if solution_count != len(sol_str_set):
                 for (n, s) in enumerate(sorted(sol_str_set)):
