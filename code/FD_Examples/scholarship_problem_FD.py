@@ -106,7 +106,7 @@ class Clues_Solver(Solver_FD):
         # Decrement clue_index back to where it was.
         self.clue_index -= 1
 
-    def state_string(self, solved):
+    def state_string(self, solved=False):
         self.clue = self.clues[self.clue_index-1]
         clue_name = 'at start' if self.clue_index == 0 else self.clue.__name__
         spacer = "* " if solved else ". "

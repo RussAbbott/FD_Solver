@@ -110,7 +110,7 @@ def set_up(board_size, trace=False):
 
 if __name__ == "__main__":
     board_size = 6
-    solver_fd = set_up(board_size=board_size, trace=board_size==6)
+    solver_fd = set_up(board_size=board_size, trace=board_size == 6)
     sols = 0
     board_string = None
     current_sol = None

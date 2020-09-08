@@ -30,7 +30,7 @@ class Columns:
 
     def complete_col(self, col_index):
         if self.col_is_ok(col_index):
-            if  self.summands_sum_upper_bound(col_index) == self.summands_sum_lower_bound(col_index):
+            if self.summands_sum_upper_bound(col_index) == self.summands_sum_lower_bound(col_index):
                 (carry_out_var, sum_dig_var) = (self.carry_out_var(col_index), self.cols[col_index][-1])
                 (carry_out, sum_dig) = divmod(self.summands_sum_upper_bound(col_index), 10)
                 (carry_out_cvar, sum_dig_cvar) = (Const_FD({carry_out}), Const_FD({sum_dig}))
